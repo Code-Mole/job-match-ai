@@ -1,4 +1,5 @@
 import express from 'express' 
+import axios from "axios"
 import Job     from '../models/Job.js'
 import { protect, adminOnly } from '../middleware/auth.js'
 
@@ -219,6 +220,34 @@ router.post('/seed', async (req, res, next) => {
     res.json({ success: true, message: `Seeded ${inserted.length} jobs.`, count: inserted.length })
 
   } catch (err) {
+    next(err)
+  }
+})
+
+// ── GET /api/match — Get AI match scores for current user ─────────────────────
+router.get('/match', protect, async (req, res, next) => {
+  try {
+    const user = req.user
+
+    // Call the Python AI service
+    const aiResponse = await axios.post(
+      `${process.env.AI_SERVICE_URL || 'http://localhost:8000'}/match`,
+      {
+        skills:    user.skills || [],
+        cv_text:   '',        // Will be populated after CV parsing in Step 9
+        years_exp: 0,         // Will come from parsed CV in Step 9
+        top_n:     20,
+      },
+      { timeout: 10000 }       // 10s timeout
+    )
+
+    res.json(aiResponse.data)
+
+  } catch (err) {
+    // If AI service is down, return jobs without scores
+    if (err.code === 'ECONNREFUSED') {
+      return res.status(503).json({ message: 'AI service unavailable. Try again shortly.' })
+    }
     next(err)
   }
 })

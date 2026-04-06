@@ -103,19 +103,19 @@ const userSchema = new mongoose.Schema(
 
 // ── Hash password before saving ───────────────────────────────────────────────
 // This runs whenever the password field is modified (create + update)
-userSchema.pre("save", async function (next) {
-  if (!this.isModified("password")) return next();
-  // Cost factor 12 = good security/speed balance
-  this.password = await bcrypt.hash(this.password, 12);
-  next();
-});
+// userSchema.pre("save", async function (next) {
+//   if (!this.isModified("password")) return next();
+//   // Cost factor 12 = good security/speed balance
+//   this.password = await bcrypt.hash(this.password, 12);
+//   next();
+// });
 
 // ── Instance method: compare entered password to hashed one ──────────────────
 userSchema.methods.comparePassword = async function (candidatePassword) {
   return bcrypt.compare(candidatePassword, this.password);
 };
 
-// ── Instance method: return safe user object (no password) ───────────────────
+//── Instance method: return safe user object (no password) ───────────────────
 userSchema.methods.toSafeObject = function () {
   const obj = this.toObject();
   delete obj.password;

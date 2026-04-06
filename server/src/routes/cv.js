@@ -1,10 +1,11 @@
 import express from "express";
-import router from express.Router();
 import multer from "multer";
 import path from "path";
 import fs from "fs";
 import User from "../models/User.js";
 import { protect } from "../middleware/auth.js";
+
+const router = express.Router();
 
 // ── Multer config ─────────────────────────────────────────────────────────────
 // Store files in server/uploads/ with a unique name

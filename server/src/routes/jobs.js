@@ -1,9 +1,8 @@
 import express from 'express' 
-import router  from express.Router() 
 import Job     from '../models/Job.js'
 import { protect, adminOnly } from '../middleware/auth.js'
 
-
+const router = express.Router();
 // ── GET /api/jobs — List with filters + pagination ───────────────────────────
 router.get('/', async (req, res, next) => {
   try {

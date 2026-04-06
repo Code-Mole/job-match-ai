@@ -1,21 +1,30 @@
-import express from 'express' 
-import router  from express.Router() 
-import User from '../models/User.js'
-;
-import  { protect } from "../middleware/auth.js";
+import express from "express";
+import bcrypt from "bcryptjs";
+import User from "../models/User.js";
+import { protect } from "../middleware/auth.js";
 import { signToken, sendAuthResponse } from "../utils/jwt.js";
 
+const router = express.Router();
 // ── POST /api/auth/register ───────────────────────────────────────────────────
-router.post("/register", async (req, res, next) => {
+router.post("/register", async (req, res) => {
   try {
     const { name, email, password } = req.body;
 
     // Basic validation
-    if (!name || !email || !password) {
-      return res
-        .status(400)
-        .json({ message: "Name, email, and password are required." });
+    if (!name) {
+      return res.status(400).json({ message: "Name is required." });
     }
+    if (!email) {
+      return res.status(400).json({ message: "Email is required." });
+    }
+    if (!password) {
+      return res.status(400).json({ message: "Password is required." });
+    }
+    // if (!name || !email || !password) {
+    //   return res
+    //     .status(400)
+    //     .json({ message: "Name, email, and password are required." });
+    // }
     if (password.length < 8) {
       return res
         .status(400)
@@ -29,12 +38,14 @@ router.post("/register", async (req, res, next) => {
         .status(409)
         .json({ message: "An account with this email already exists." });
     }
+    // hashing the password is handled by the pre-save hook in the User model
+    const hashedPassword = await bcrypt.hash(password, 12);
 
     // Create user — password is hashed by the pre-save hook in User.js
     const user = await User.create({
       name: name.trim(),
       email: email.toLowerCase(),
-      password,
+      password: hashedPassword,
     });
     const token = signToken(user._id);
 
@@ -44,20 +55,23 @@ router.post("/register", async (req, res, next) => {
 
     sendAuthResponse(res, 201, user, token);
   } catch (err) {
-    next(err);
+    return res
+      .status(500)
+      .json({ message: "Server error. Please try again later." });
   }
 });
 
 // ── POST /api/auth/login ──────────────────────────────────────────────────────
-router.post("/login", async (req, res, next) => {
+router.post("/login", async (req, res) => {
   try {
     const { email, password } = req.body;
-
-    if (!email || !password) {
-      return res
-        .status(400)
-        .json({ message: "Email and password are required." });
+    if (!email) {
+      return res.status(400).json({ message: "Email is required." });
     }
+    if (!password) {
+      return res.status(400).json({ message: "Password is required." });
+    }
+    // compare password
 
     // Must explicitly select password since it's select:false in schema
     const user = await User.findOne({ email: email.toLowerCase() }).select(
@@ -86,7 +100,9 @@ router.post("/login", async (req, res, next) => {
     const token = signToken(user._id);
     sendAuthResponse(res, 200, user, token);
   } catch (err) {
-    next(err);
+    return res
+      .status(500)
+      .json({ message: "Server error. Please try again later." });
   }
 });
 
@@ -153,8 +169,10 @@ router.put("/change-password", protect, async (req, res, next) => {
         .status(401)
         .json({ message: "Current password is incorrect." });
     }
+    //hash new password
+    const hashedPassword = await bcrypt.hash(newPassword, 12);
 
-    user.password = newPassword; // pre-save hook will hash it
+    user.password = hashedPassword; // pre-save hook will hash it
     await user.save();
 
     res.json({ success: true, message: "Password updated successfully." });

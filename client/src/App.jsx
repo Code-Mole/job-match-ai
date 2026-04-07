@@ -3,13 +3,14 @@ import { useAuth } from "./context/AuthContext";
 import LoginPage from "./pages/auth/LoginPage";
 import SignupPage from "./pages/auth/SignupPage";
 import DashboardPage from "./pages/dashboard/DashboardPage";
+import JobsPage from "./pages/jobs/JobsPage";
+import JobDetailPage from "./pages/jobs/JobDetailPage";
+import CareersPage from "./pages/careers/CareersPage";
 
-// Stubs for steps 5–8
 const Stub = ({ name }) => (
   <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-900">
     <p className="text-2xl font-display font-bold text-slate-400">
-      {name} — coming in Step{" "}
-      {name === "Jobs" ? 5 : name === "Careers" ? 6 : name === "Skills" ? 7 : 8}
+      {name} — coming soon
     </p>
   </div>
 );
@@ -27,7 +28,6 @@ export default function App() {
       <Route path="/login" element={<LoginPage />} />
       <Route path="/signup" element={<SignupPage />} />
 
-      {/* Protected routes — all wrapped in DashboardPage's layout */}
       <Route
         path="/"
         element={
@@ -40,7 +40,7 @@ export default function App() {
         path="/jobs"
         element={
           <ProtectedRoute>
-            <Stub name="Jobs" />
+            <JobsPage />
           </ProtectedRoute>
         }
       />
@@ -48,7 +48,7 @@ export default function App() {
         path="/jobs/:id"
         element={
           <ProtectedRoute>
-            <Stub name="Job Details" />
+            <JobDetailPage />
           </ProtectedRoute>
         }
       />
@@ -56,10 +56,12 @@ export default function App() {
         path="/careers"
         element={
           <ProtectedRoute>
-            <Stub name="Careers" />
+            <CareersPage />
           </ProtectedRoute>
         }
       />
+
+      {/* Steps 7–8 still stub */}
       <Route
         path="/skills"
         element={

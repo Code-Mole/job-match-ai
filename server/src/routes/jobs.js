@@ -224,7 +224,7 @@ router.post('/seed', async (req, res, next) => {
   }
 })
 
-// ── GET /api/match — Get AI match scores for current user ─────────────────────
+// ── GET /api/jobs/match — Get AI match scores for current user ─────────────────────
 router.get('/match', protect, async (req, res, next) => {
   try {
     const user = req.user
@@ -250,6 +250,40 @@ router.get('/match', protect, async (req, res, next) => {
     }
     next(err)
   }
+})
+
+// ── POST /api/jobs/:id/save ───────────────────────────────────────────────────
+router.post('/:id/save', protect, async (req, res, next) => {
+  try {
+    const user = await require('../models/User').findById(req.user._id)
+    const jobId = req.params.id
+    const idx   = user.savedJobs.indexOf(jobId)
+
+    if (idx === -1) {
+      user.savedJobs.push(jobId)
+    } else {
+      user.savedJobs.splice(idx, 1) // toggle off
+    }
+
+    await user.save({ validateBeforeSave: false })
+    res.json({ success: true, saved: idx === -1 })
+  } catch (err) { next(err) }
+})
+
+// ── POST /api/jobs/:id/apply ──────────────────────────────────────────────────
+router.post('/:id/apply', protect, async (req, res, next) => {
+  try {
+    const user  = await require('../models/User').findById(req.user._id)
+    const jobId = req.params.id
+    const already = user.appliedJobs.find(a => a.job.toString() === jobId)
+
+    if (!already) {
+      user.appliedJobs.push({ job: jobId })
+      await user.save({ validateBeforeSave: false })
+    }
+
+    res.json({ success: true, message: 'Application recorded.' })
+  } catch (err) { next(err) }
 })
 
 export default router

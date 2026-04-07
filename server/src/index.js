@@ -10,6 +10,7 @@ import { errorHandler, notFound } from "./middleware/errorHandler.js";
 import authRoutes from "./routes/auth.js";
 import jobRoutes from "./routes/jobs.js";
 import cvRoutes from "./routes/cv.js";
+import aiRoutes from "./routes/ai.js";
 
 dotenv.config();
 // ── Connect to MongoDB ────────────────────────────────────────────────────────
@@ -60,6 +61,7 @@ app.get("/health", (req, res) => {
 app.use("/api/auth", authRoutes);
 app.use("/api/jobs", jobRoutes);
 app.use("/api/cv", cvRoutes);
+app.use("/api/ai", aiRoutes);
 
 // ── 404 + error handlers ──────────────────────────────────────────────────────
 // notFound must come after all routes

@@ -7,7 +7,7 @@ import JobsPage from "./pages/jobs/JobsPage";
 import JobDetailPage from "./pages/jobs/JobDetailPage";
 import CareersPage from "./pages/careers/CareersPage";
 import SkillsPage from "./pages/skills/SkillsPage";
-
+import AssistantPage from "./pages/assistant/AssistantPage";
 const Stub = ({ name }) => (
   <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-900">
     <p className="text-2xl font-display font-bold text-slate-400">
@@ -74,7 +74,7 @@ export default function App() {
         path="/assistant"
         element={
           <ProtectedRoute>
-            <Stub name="AI Assistant" />
+            <AssistantPage />
           </ProtectedRoute>
         }
       />

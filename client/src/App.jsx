@@ -6,11 +6,12 @@ import DashboardPage from "./pages/dashboard/DashboardPage";
 import JobsPage from "./pages/jobs/JobsPage";
 import JobDetailPage from "./pages/jobs/JobDetailPage";
 import CareersPage from "./pages/careers/CareersPage";
+import SkillsPage from "./pages/skills/SkillsPage";
 
 const Stub = ({ name }) => (
   <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-900">
     <p className="text-2xl font-display font-bold text-slate-400">
-      {name} — coming soon
+      {name} — coming in Step 8
     </p>
   </div>
 );
@@ -60,16 +61,15 @@ export default function App() {
           </ProtectedRoute>
         }
       />
-
-      {/* Steps 7–8 still stub */}
       <Route
         path="/skills"
         element={
           <ProtectedRoute>
-            <Stub name="Skills" />
+            <SkillsPage />
           </ProtectedRoute>
         }
       />
+
       <Route
         path="/assistant"
         element={
@@ -78,7 +78,6 @@ export default function App() {
           </ProtectedRoute>
         }
       />
-
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );

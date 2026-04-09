@@ -1,12 +1,15 @@
 import { useState, useEffect, useCallback } from "react";
 import axios from "axios";
 import { useAuth } from "../context/AuthContext";
+import { useToast } from '../components/ui/Toast'
 
 export function useSkillGap(jobId = null, jobData = null) {
   const { user } = useAuth();
   const [gap, setGap] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+
+  const toast = useToast();
 
   const fetchGap = useCallback(
     async (jId, jData) => {
@@ -24,6 +27,7 @@ export function useSkillGap(jobId = null, jobData = null) {
         setError(
           err.response?.data?.message || "Failed to load skill gap analysis.",
         );
+        toast('Skill gap analysis unavailable — showing cached data.', 'info');
       } finally {
         setLoading(false);
       }

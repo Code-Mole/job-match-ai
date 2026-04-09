@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Bell, Search } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import ThemeToggle from "../ui/ThemeToggle";
+import ProfileDropdown from './ProfileDropdown'
 
 // Returns time-appropriate greeting
 function getGreeting(name) {
@@ -74,7 +75,7 @@ export default function Header({ onSearch }) {
 
       {/* Avatar */}
       <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center flex-shrink-0">
-        <span className="text-xs font-bold text-white">
+        {/* <span className="text-xs font-bold text-white">
           {user?.name
             ? user.name
                 .split(" ")
@@ -83,7 +84,8 @@ export default function Header({ onSearch }) {
                 .slice(0, 2)
                 .toUpperCase()
             : "U"}
-        </span>
+        </span> */}
+        <ProfileDropdown />
       </div>
     </header>
   );

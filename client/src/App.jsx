@@ -8,6 +8,8 @@ import JobDetailPage from "./pages/jobs/JobDetailPage";
 import CareersPage from "./pages/careers/CareersPage";
 import SkillsPage from "./pages/skills/SkillsPage";
 import AssistantPage from "./pages/assistant/AssistantPage";
+import SettingsPage from './pages/settings/SettingsPage'
+
 const Stub = ({ name }) => (
   <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-900">
     <p className="text-2xl font-display font-bold text-slate-400">
@@ -78,6 +80,7 @@ export default function App() {
           </ProtectedRoute>
         }
       />
+      <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );

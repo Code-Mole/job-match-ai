@@ -1,4 +1,4 @@
-import { NavLink, useLocation } from "react-router-dom";
+import { Link,NavLink, useLocation } from "react-router-dom";
 import {
   LayoutDashboard,
   Briefcase,
@@ -18,6 +18,7 @@ const NAV_ITEMS = [
   { path: "/careers", icon: TrendingUp, label: "Careers" },
   { path: "/skills", icon: Zap, label: "Skills" },
   { path: "/assistant", icon: MessageSquare, label: "AI Assistant" },
+  // { path: "/settings", icon: Settings, label: "Settings" },
 ];
 
 export default function Sidebar() {
@@ -105,6 +106,8 @@ export default function Sidebar() {
         </div>
 
         {/* Settings */}
+        <Link
+          to="/settings">
         <button
           className="
           w-full flex items-center gap-3 px-3 py-2 rounded-xl
@@ -116,7 +119,7 @@ export default function Sidebar() {
           <Settings size={16} />
           Settings
         </button>
-
+        </Link>
         {/* Logout */}
         <button
           onClick={logout}

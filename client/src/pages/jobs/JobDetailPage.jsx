@@ -22,6 +22,7 @@ import { Skeleton } from "../../components/ui/LoadingSkeleton";
 import { useJob } from "../../hooks/useJob";
 import { useAuth } from "../../context/AuthContext";
 import axios from "axios";
+import { useToast } from '../../components/ui/Toast';
 
 // ── Circular match score indicator ────────────────────────────────────────────
 function ScoreCircle({ score }) {
@@ -139,6 +140,7 @@ export default function JobDetailPage() {
   const [applied, setApplied] = useState(false);
   const [applyLoading, setApplyLoading] = useState(false);
   const [activeTab, setActiveTab] = useState("description"); // 'description' | 'requirements' | 'skills'
+  const toast = useToast();
 
   const handleSave = async () => {
     setSaved((prev) => !prev);
@@ -149,23 +151,47 @@ export default function JobDetailPage() {
     } // revert on error
   };
 
+  // const handleApply = async () => {
+  //   if (applied) return;
+  //   setApplyLoading(true);
+  //   try {
+  //     // If job has an apply URL, open it; otherwise mark as applied internally
+  //     if (job.applyUrl) {
+  //       window.open(job.applyUrl, "_blank");
+  //     }
+  //     await axios.post(`/api/jobs/${id}/apply`);
+  //     setApplied(true);
+  //   } catch (err) {
+  //     // For demo, just mark as applied even if API fails
+  //     setApplied(true);
+  //   } finally {
+  //     setApplyLoading(false);
+  //   }
+  // };
   const handleApply = async () => {
-    if (applied) return;
-    setApplyLoading(true);
-    try {
-      // If job has an apply URL, open it; otherwise mark as applied internally
-      if (job.applyUrl) {
-        window.open(job.applyUrl, "_blank");
-      }
-      await axios.post(`/api/jobs/${id}/apply`);
-      setApplied(true);
-    } catch (err) {
-      // For demo, just mark as applied even if API fails
-      setApplied(true);
-    } finally {
-      setApplyLoading(false);
+  if (applied || applyLoading) return
+  setApplyLoading(true)
+  try {
+    const { data } = await axios.post(`/api/jobs/${id}/apply`)
+
+    if (data.alreadyApplied) {
+      toast('You already applied to this job', 'info')
+    } else {
+      setApplied(true)
+      toast(`Application to ${job.title} recorded! Check your email for confirmation.`, 'success')
     }
-  };
+
+    // Open the real application URL in a new tab
+    if (data.applyUrl) {
+      setTimeout(() => window.open(data.applyUrl, '_blank', 'noopener,noreferrer'), 300)
+    }
+
+  } catch (err) {
+    toast(err.response?.data?.message || 'Failed to submit application. Please try again.', 'error')
+  } finally {
+    setApplyLoading(false)
+  }
+}
 
   if (loading)
     return (

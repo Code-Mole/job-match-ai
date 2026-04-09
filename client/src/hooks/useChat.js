@@ -1,139 +1,160 @@
-import { useState, useCallback, useRef } from "react";
-import axios from "axios";
-
-// Rule-based responses for demo — replaced by real AI in production
-const RULE_RESPONSES = {
-  "find jobs|job matches|matching jobs": (ctx) =>
-    `Based on your profile, here are your top matches:\n\n${
-      ctx.jobs
-        ?.slice(0, 4)
-        .map(
-          (j, i) =>
-            `${i + 1}. **${j.title} at ${j.company}** — ${j.matchScore ?? 80 - i * 7}% match`,
-        )
-        .join("\n") ||
-      "• **Senior Frontend Dev at Stripe** — 92% match\n• **Full Stack Engineer at Vercel** — 85% match\n• **React Developer at Linear** — 78% match\n• **UI Engineer at Figma** — 71% match"
-    }\n\nWant me to explain any of these matches in detail?`,
-
-  "skill|learn|improve|missing": (ctx) =>
-    `Based on your profile and top job requirements, here are the highest-impact skills to learn:\n\n1. **GraphQL** — required by 3 of your top matches\n2. **Jest / Testing** — mentioned in 4 job descriptions\n3. **Docker** — fast-growing requirement across all roles\n4. **AWS** — unlocks 40% more senior positions\n\nShall I build a full learning path for any of these?`,
-
-  "career path|progression|grow|advance": () =>
-    `Based on your React + TypeScript background, two strong paths stand out:\n\n**Path A — Frontend Specialist**\nJunior Dev → Senior Dev → Staff Engineer\n$60k → $130k → $200k+\n*Timeline: 6–8 years*\n\n**Path B — Full Stack Engineer**\nFrontend → Full Stack → Tech Lead → Engineering Manager\n$90k → $150k → $250k+\n*Timeline: 7–10 years*\n\nPath B pays ~15% more at peak but requires adding Node.js, databases, and system design. Which path interests you?`,
-
-  "compare|versus|vs|difference": () =>
-    `Here's a quick comparison of the two most popular paths for your profile:\n\n| | Frontend | Full Stack |\n|---|---|---|\n| Avg salary | $115k | $130k |\n| Demand trend | Increasing | Increasing |\n| Remote friendly | ✓ Yes | ✓ Yes |\n| Time to senior | 4–5 yrs | 5–7 yrs |\n| Breadth required | Moderate | High |\n\n**Verdict:** Full Stack pays ~13% more and has more open roles, but requires significantly broader knowledge. Your current React + TypeScript skills give you a strong foundation for either.`,
-
-  "salary|pay|earn|money|compensation": () =>
-    `Here are current salary ranges for your top matched roles:\n\n• **Senior Frontend Developer** — $120k–$150k\n• **Full Stack Engineer** — $130k–$160k\n• **React Developer (Mid)** — $110k–$140k\n• **UI Engineer** — $125k–$155k\n• **ML Engineer** — $150k–$200k\n\nSalaries vary significantly by location. Remote roles from US companies typically pay 10–20% more than local equivalents in other markets.`,
-
-  "resume|cv|upload|parse": () =>
-    `To get the most accurate job matches, upload your CV from the **Dashboard** page. I can:\n\n• Extract your skills automatically\n• Update your match scores in real time\n• Identify skill gaps against specific roles\n• Generate a personalised learning path\n\nSupported formats: **PDF**, **DOCX**, and **TXT** (max 10MB).`,
-
-  "hello|hi|hey|help|start": () =>
-    `Hi there! I'm your AI Career Assistant. Here's what I can help you with:\n\n• 🔍 **Find jobs** matching your skills\n• 📊 **Analyse skill gaps** for specific roles\n• 🗺️ **Map career paths** and progressions\n• 💰 **Compare salaries** across roles\n• 📚 **Recommend courses** to close skill gaps\n\nWhat would you like to explore first?`,
-};
-
-const FALLBACK = `That's a great question! I'm still learning about your specific situation. Here's what I'd suggest:\n\n1. **Upload your CV** on the Dashboard for personalised matches\n2. **Check the Skills page** for your gap analysis\n3. **Browse the Careers page** for market salary data\n\nIs there something specific about job matching, skills, or career paths I can help with?`;
-
-function getRuleBasedResponse(message, context) {
-  const lower = message.toLowerCase();
-  for (const [pattern, fn] of Object.entries(RULE_RESPONSES)) {
-    if (pattern.split("|").some((p) => lower.includes(p))) {
-      return fn(context);
-    }
-  }
-  return FALLBACK;
-}
+import { useState, useCallback, useRef } from 'react'
+import { useAuth } from '../context/AuthContext'
 
 export const SUGGESTED_PROMPTS = [
-  { id: "p1", text: "Find jobs matching my skills", icon: "🔍" },
-  { id: "p2", text: "What skills should I learn?", icon: "📚" },
-  { id: "p3", text: "Suggest a career path", icon: "🗺️" },
-  { id: "p4", text: "Compare Frontend vs Full Stack", icon: "⚖️" },
-  { id: "p5", text: "What salary should I expect?", icon: "💰" },
-  { id: "p6", text: "How do I improve my CV?", icon: "📄" },
-];
+  { id: 'p1', text: 'What jobs match my skills?',       icon: '🔍' },
+  { id: 'p2', text: 'What skills should I learn next?', icon: '📚' },
+  { id: 'p3', text: 'Suggest a career path for me',     icon: '🗺️' },
+  { id: 'p4', text: 'How do I negotiate my salary?',    icon: '💰' },
+  { id: 'p5', text: 'Review my profile and give tips',  icon: '✏️' },
+  { id: 'p6', text: 'Compare Frontend vs Full Stack',   icon: '⚖️' },
+]
 
-export function useChat(context = {}) {
-  const [messages, setMessages] = useState([
-    {
-      id: "welcome",
-      role: "assistant",
-      content: `Hi! I'm your AI Career Assistant. I can help you find jobs, analyse skill gaps, map career paths, and compare roles.\n\nWhat would you like to explore?`,
+const WELCOME = (name, skills) => {
+  const firstName = name?.split(' ')[0] || 'there'
+  const hasSkills = skills?.length > 0
+  return hasSkills
+    ? `Hi ${firstName}! I can see you have skills in **${skills.slice(0,3).join(', ')}**${skills.length > 3 ? ` and ${skills.length - 3} more` : ''}.\n\nHow can I help you today? I can find matching jobs, analyse your skill gaps, or suggest your next career move.`
+    : `Hi ${firstName}! I'm your AI Career Assistant.\n\nI notice you haven't uploaded your CV yet — that's the best way to get personalised job matches and skill gap analysis. Try uploading it from the **Dashboard**.\n\nIn the meantime, what would you like to know about your career?`
+}
+
+export function useChat() {
+  const { user } = useAuth()
+
+  const [messages, setMessages] = useState(() => [{
+    id:        'welcome',
+    role:      'assistant',
+    content:   WELCOME(user?.name, user?.skills),
+    timestamp: new Date(),
+    streaming: false,
+  }])
+  const [loading, setLoading]   = useState(false)
+  const [error, setError]       = useState(null)
+  const abortRef                = useRef(null)
+
+  const sendMessage = useCallback(async (text) => {
+    if (!text?.trim() || loading) return
+
+    // Add user message immediately
+    const userMsg = {
+      id:        `u-${Date.now()}`,
+      role:      'user',
+      content:   text.trim(),
       timestamp: new Date(),
-    },
-  ]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
-  const abortRef = useRef(null);
+    }
+    setMessages(prev => [...prev, userMsg])
+    setLoading(true)
+    setError(null)
 
-  const sendMessage = useCallback(
-    async (text) => {
-      if (!text.trim() || loading) return;
+    // Add empty assistant message that will be filled by streaming
+    const assistantId = `a-${Date.now()}`
+    setMessages(prev => [...prev, {
+      id:        assistantId,
+      role:      'assistant',
+      content:   '',
+      timestamp: new Date(),
+      streaming: true,
+    }])
 
-      const userMsg = {
-        id: `u-${Date.now()}`,
-        role: "user",
-        content: text.trim(),
-        timestamp: new Date(),
-      };
+    // Abort previous request if any
+    if (abortRef.current) abortRef.current.abort()
+    abortRef.current = new AbortController()
 
-      setMessages((prev) => [...prev, userMsg]);
-      setLoading(true);
-      setError(null);
+    try {
+      const token = localStorage.getItem('token')
+      const history = messages.slice(-8).map(m => ({ role: m.role, content: m.content }))
 
-      try {
-        // Try the real AI endpoint first (Step 11 wires Claude here)
-        // For now falls through to rule-based response
-        let response;
-        try {
-          const { data } = await axios.post(
-            "/api/ai/chat",
-            {
-              message: text.trim(),
-              history: messages
-                .slice(-6)
-                .map((m) => ({ role: m.role, content: m.content })),
-              context,
-            },
-            { timeout: 8000 },
-          );
-          response = data.reply;
-        } catch {
-          // AI service unavailable — use rule-based fallback
-          // Small artificial delay makes it feel like it's "thinking"
-          await new Promise((r) => setTimeout(r, 900 + Math.random() * 600));
-          response = getRuleBasedResponse(text, context);
+      const response = await fetch(
+        `${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/ai/chat`,
+        {
+          method:  'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          },
+          body:   JSON.stringify({ message: text.trim(), history }),
+          signal: abortRef.current.signal,
         }
+      )
 
-        const assistantMsg = {
-          id: `a-${Date.now()}`,
-          role: "assistant",
-          content: response,
-          timestamp: new Date(),
-        };
-        setMessages((prev) => [...prev, assistantMsg]);
-      } catch (err) {
-        setError("Something went wrong. Please try again.");
-      } finally {
-        setLoading(false);
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}))
+        throw new Error(errData.message || `Server error ${response.status}`)
       }
-    },
-    [messages, loading, context],
-  );
 
-  const clearChat = () => {
-    setMessages([
-      {
-        id: "welcome-new",
-        role: "assistant",
-        content: "Chat cleared. How can I help you?",
-        timestamp: new Date(),
-      },
-    ]);
-    setError(null);
-  };
+      // Read SSE stream
+      const reader  = response.body.getReader()
+      const decoder = new TextDecoder()
+      let   fullText = ''
 
-  return { messages, loading, error, sendMessage, clearChat };
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+
+        const chunk = decoder.decode(value, { stream: true })
+        const lines = chunk.split('\n')
+
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue
+          const payload = line.slice(6).trim()
+          if (payload === '[DONE]') break
+          try {
+            const parsed = JSON.parse(payload)
+            if (parsed.error) throw new Error(parsed.error)
+            if (parsed.text) {
+              fullText += parsed.text
+              // Update the streaming message token-by-token
+              setMessages(prev =>
+                prev.map(m => m.id === assistantId
+                  ? { ...m, content: fullText }
+                  : m
+                )
+              )
+            }
+          } catch (parseErr) {
+            if (parseErr.message !== 'Unexpected end of JSON input') {
+              console.warn('SSE parse error:', parseErr.message)
+            }
+          }
+        }
+      }
+
+      // Mark streaming as complete
+      setMessages(prev =>
+        prev.map(m => m.id === assistantId
+          ? { ...m, content: fullText || 'Sorry, I received an empty response. Please try again.', streaming: false }
+          : m
+        )
+      )
+
+    } catch (err) {
+      if (err.name === 'AbortError') return
+
+      const fallback = 'I encountered an error. Please check that the server is running and your API key is set, then try again.'
+      setMessages(prev =>
+        prev.map(m => m.id === assistantId
+          ? { ...m, content: fallback, streaming: false, isError: true }
+          : m
+        )
+      )
+      setError(err.message)
+    } finally {
+      setLoading(false)
+    }
+  }, [messages, loading])
+
+  const clearChat = useCallback(() => {
+    abortRef.current?.abort()
+    setMessages([{
+      id:        `welcome-${Date.now()}`,
+      role:      'assistant',
+      content:   WELCOME(user?.name, user?.skills),
+      timestamp: new Date(),
+      streaming: false,
+    }])
+    setError(null)
+    setLoading(false)
+  }, [user])
+
+  return { messages, loading, error, sendMessage, clearChat }
 }

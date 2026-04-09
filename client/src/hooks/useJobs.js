@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import axios from "axios";
+import { useToast } from '../components/ui/Toast'
 
 const DEFAULT_FILTERS = {
   search: "",
@@ -25,6 +26,8 @@ export function useJobs() {
 
   // Debounce search — wait 400ms after last keystroke before fetching
   const searchTimer = useRef(null);
+
+  const toast = useToast();
 
   // ── Fetch jobs from Express backend ────────────────────────────────────────
   const fetchJobs = useCallback(
@@ -52,6 +55,7 @@ export function useJobs() {
         setPages(data.pages || 1);
       } catch (err) {
         setError(err.response?.data?.message || "Failed to load jobs.");
+        toast(err.response?.data?.message || 'Failed to load jobs.', 'error')
       } finally {
         setLoading(false);
       }

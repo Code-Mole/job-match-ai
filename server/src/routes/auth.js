@@ -181,4 +181,52 @@ router.put("/change-password", protect, async (req, res, next) => {
   }
 });
 
+// ── DELETE /api/auth/account ──────────────────────────────────────────────────
+router.delete('/account', protect, async (req, res, next) => {
+  try {
+    await User.findByIdAndDelete(req.user._id)
+    res.json({ success: true, message: 'Account deleted.' })
+  } catch (err) { next(err) }
+})
+
+// ── GET /api/auth/export ──────────────────────────────────────────────────────
+router.get('/export', protect, async (req, res, next) => {
+  try {
+    const user = await User.findById(req.user._id).select('-password -__v')
+    res.json({ exported_at: new Date(), user })
+  } catch (err) { next(err) }
+})
+
+// ── GET /api/auth/stats ───────────────────────────────────────────────────────
+router.get('/stats', protect, async (req, res, next) => {
+  try {
+    const user = req.user
+    const Job  = require('../models/Job')
+
+    const [totalJobs, appliedCount, savedCount] = await Promise.all([
+      Job.countDocuments({ isActive: true }),
+      user.appliedJobs?.length || 0,
+      user.savedJobs?.length   || 0,
+    ])
+
+    res.json({
+      success:       true,
+      totalJobs,
+      appliedCount,
+      savedCount,
+      skillCount:    user.skills?.length    || 0,
+      cvParsed:      user.cvParsed          || false,
+      profileStrength: Math.min(100, Math.round(
+        (user.name         ? 15 : 0) +
+        (user.headline     ? 10 : 0) +
+        (user.bio          ? 10 : 0) +
+        (user.location     ? 10 : 0) +
+        (user.cvParsed     ? 25 : 0) +
+        (user.skills?.length > 3 ? 20 : (user.skills?.length || 0) * 5) +
+        (user.experience?.length > 0 ? 10 : 0)
+      )),
+    })
+  } catch (err) { next(err) }
+})
+
 export default router;

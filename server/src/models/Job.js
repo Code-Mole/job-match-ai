@@ -54,6 +54,10 @@ const jobSchema = new mongoose.Schema(
     isActive: { type: Boolean, default: true },
     featured: { type: Boolean, default: false },
     postedAt: { type: Date, default: Date.now },
+    // Add to jobSchema:
+    externalId: { type: String, unique: true, sparse: true }, // Adzuna/Remotive ID
+    applyUrl:   { type: String, default: '' },                // real application URL
+    source:     { type: String, enum: ['manual','adzuna','remotive','seed'], default: 'manual' },
   },
   {
     timestamps: true,

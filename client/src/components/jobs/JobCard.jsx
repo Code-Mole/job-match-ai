@@ -67,12 +67,14 @@ export default function JobCard({ job, loading = false }) {
     <div
       className="
       group relative
-      bg-white dark:bg-slate-800
-      border border-slate-200 dark:border-white/8
+      bg-slate-50 dark:bg-slate-800
+      border border-slate-200/90 dark:border-white/8
+      shadow-md shadow-slate-200/60 dark:shadow-none
       hover:border-blue-200 dark:hover:border-blue-500/30
       rounded-2xl p-5
       transition-all duration-200
-      hover:shadow-lg hover:shadow-blue-500/8 dark:hover:shadow-slate-900/50
+      hover:shadow-lg hover:shadow-slate-300/50 hover:shadow-blue-500/8
+      dark:hover:shadow-slate-900/50
       cursor-pointer
     "
       onClick={() => navigate(`/jobs/${job._id || job.id}`)}

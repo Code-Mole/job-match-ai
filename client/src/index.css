@@ -43,6 +43,15 @@ html:not(.dark) .text-slate-400 {
     @apply dark:bg-slate-800/60 dark:border-white/10 dark:shadow-slate-900/50;
   }
 
+  .surface-card {
+    @apply bg-slate-50 border border-slate-200/90 shadow-md shadow-slate-200/70;
+    @apply dark:bg-slate-800 dark:border-white/20 dark:shadow-slate-900/40;
+  }
+
+  html:not(.dark) .surface-card {
+    @apply bg-slate-50 shadow-lg shadow-slate-300/40;
+  }
+
   .btn-primary {
     @apply bg-blue-600 hover:bg-blue-700 active:bg-blue-800
            text-white font-semibold rounded-xl px-5 py-2.5

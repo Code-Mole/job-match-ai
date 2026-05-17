@@ -965,54 +965,68 @@ async function fetchRemotive() {
   }
 }
 
+function jobFingerprint(job) {
+  if (job.fingerprint) return job.fingerprint.toLowerCase().trim();
+  return `${(job.title || "").toLowerCase().trim()}|${(job.company || "").toLowerCase().trim()}|${(job.location || "").toLowerCase().trim()}`;
+}
+
+/**
+ * Return only jobs that are not already stored (by externalId or title/company/location).
+ */
+async function filterNewJobs(jobs) {
+  if (!jobs.length) return { newJobs: [], skipped: 0 };
+
+  const externalIds = jobs.map((j) => j.externalId).filter(Boolean);
+  const fingerprints = jobs.map(jobFingerprint).filter(Boolean);
+  const orClauses = [];
+  if (externalIds.length) orClauses.push({ externalId: { $in: externalIds } });
+  if (fingerprints.length) orClauses.push({ fingerprint: { $in: fingerprints } });
+
+  if (!orClauses.length) return { newJobs: jobs, skipped: 0 };
+
+  const existing = await Job.find({ $or: orClauses })
+    .select("externalId fingerprint title company location")
+    .lean();
+
+  const seenIds = new Set(existing.map((e) => e.externalId).filter(Boolean));
+  const seenFp = new Set(
+    existing.map((e) =>
+      e.fingerprint ||
+      `${(e.title || "").toLowerCase().trim()}|${(e.company || "").toLowerCase().trim()}|${(e.location || "").toLowerCase().trim()}`,
+    ),
+  );
+
+  const newJobs = [];
+  for (const job of jobs) {
+    const fp = jobFingerprint(job);
+    if (job.externalId && seenIds.has(job.externalId)) continue;
+    if (fp && seenFp.has(fp)) continue;
+    newJobs.push(job);
+    if (job.externalId) seenIds.add(job.externalId);
+    if (fp) seenFp.add(fp);
+  }
+
+  return { newJobs, skipped: jobs.length - newJobs.length };
+}
+
 /* =========================
-   UPSERT JOBS
+   INSERT NEW JOBS ONLY
 ========================= */
 
-async function upsertJobs(jobs) {
+async function insertNewJobs(jobs) {
   if (!jobs.length) return 0;
 
   try {
-    const bulkOps = jobs.map((job) => ({
-      updateOne: {
-        filter: {
-          externalId: job.externalId,
-        },
-
-        update: {
-          $set: job,
-        },
-
-        upsert: true,
-      },
-    }));
-
-    const result = await Job.bulkWrite(bulkOps, {
-      ordered: false,
-    });
-
-    console.log("━━━━━━━━━━━━━━━━━━━━━━");
-    console.log("💾 BULK WRITE RESULT");
-    console.log("━━━━━━━━━━━━━━━━━━━━━━");
-
-    console.log(result);
-
-    return (
-      (result.upsertedCount || 0) +
-      (result.modifiedCount || 0)
-    );
+    const result = await Job.insertMany(jobs, { ordered: false });
+    console.log(`💾 Inserted ${result.length} new jobs`);
+    return result.length;
   } catch (err) {
-    console.error("❌ Bulk write failed");
-
-    if (err.writeErrors) {
-      console.error(
-        "Write errors:",
-        err.writeErrors.slice(0, 5)
-      );
-    } else {
-      console.error(err);
+    if (err.code === 11000 || err.writeErrors) {
+      const inserted = err.insertedDocs?.length ?? 0;
+      console.warn(`⚠️ Partial insert: ${inserted} jobs (${err.writeErrors?.length || 0} duplicates skipped)`);
+      return inserted;
     }
-
+    console.error("❌ Job insert failed", err.message);
     return 0;
   }
 }
@@ -1091,11 +1105,15 @@ async function syncJobs(force = false, category = "all") {
 
       return {
         synced: 0,
+        skipped: 0,
         total: await Job.countDocuments(),
       };
     }
 
-    const saved = await upsertJobs(allJobs);
+    const { newJobs, skipped } = await filterNewJobs(allJobs);
+    console.log(`New jobs to insert: ${newJobs.length} (skipped ${skipped} already in DB)`);
+
+    const saved = await insertNewJobs(newJobs);
 
     // Backfill requirements on older rows that were synced before extraction existed
     const stale = await Job.find({
@@ -1131,6 +1149,7 @@ async function syncJobs(force = false, category = "all") {
 
     return {
       synced: saved,
+      skipped,
       total,
     };
   } catch (err) {

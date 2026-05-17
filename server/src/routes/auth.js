@@ -10,8 +10,72 @@ import {
   verifySmtpConnection,
   sendMail,
 } from "../utils/email.js";
+import {
+  getGoogleAuthUrl,
+  getLinkedInAuthUrl,
+  handleGoogleCallback,
+  handleLinkedInCallback,
+  oauthRedirectWithToken,
+} from "../utils/oauth.js";
 
 const router = express.Router();
+const CLIENT_URL = process.env.CLIENT_URL || "http://localhost:5173";
+// ── Google OAuth ──────────────────────────────────────────────────────────────
+router.get("/google", (req, res) => {
+  const url = getGoogleAuthUrl();
+  if (!url) {
+    return res.redirect(
+      `${CLIENT_URL}/login?error=${encodeURIComponent("Google sign-in is not configured. Add GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET to server/.env")}`,
+    );
+  }
+  res.redirect(url);
+});
+
+router.get("/google/callback", async (req, res) => {
+  try {
+    const { code, error } = req.query;
+    if (error || !code) {
+      return res.redirect(
+        `${CLIENT_URL}/login?error=${encodeURIComponent(error || "Google sign-in was cancelled.")}`,
+      );
+    }
+    const token = await handleGoogleCallback(code);
+    res.redirect(oauthRedirectWithToken(token));
+  } catch (err) {
+    res.redirect(
+      `${CLIENT_URL}/login?error=${encodeURIComponent(err.message || "Google sign-in failed.")}`,
+    );
+  }
+});
+
+// ── LinkedIn OAuth ────────────────────────────────────────────────────────────
+router.get("/linkedin", (req, res) => {
+  const url = getLinkedInAuthUrl();
+  if (!url) {
+    return res.redirect(
+      `${CLIENT_URL}/login?error=${encodeURIComponent("LinkedIn sign-in is not configured. Add LINKEDIN_CLIENT_ID and LINKEDIN_CLIENT_SECRET to server/.env")}`,
+    );
+  }
+  res.redirect(url);
+});
+
+router.get("/linkedin/callback", async (req, res) => {
+  try {
+    const { code, error } = req.query;
+    if (error || !code) {
+      return res.redirect(
+        `${CLIENT_URL}/login?error=${encodeURIComponent(error || "LinkedIn sign-in was cancelled.")}`,
+      );
+    }
+    const token = await handleLinkedInCallback(code);
+    res.redirect(oauthRedirectWithToken(token));
+  } catch (err) {
+    res.redirect(
+      `${CLIENT_URL}/login?error=${encodeURIComponent(err.message || "LinkedIn sign-in failed.")}`,
+    );
+  }
+});
+
 // ── POST /api/auth/register ───────────────────────────────────────────────────
 router.post("/register", async (req, res) => {
   try {

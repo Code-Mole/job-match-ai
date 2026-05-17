@@ -19,11 +19,18 @@ const userSchema = new mongoose.Schema(
     },
     password: {
       type: String,
-      required: [true, "Password is required"],
       minlength: [8, "Password must be at least 8 characters"],
-      // Never return password in API responses
       select: false,
     },
+
+    googleId: { type: String, sparse: true, unique: true },
+    linkedinId: { type: String, sparse: true, unique: true },
+    authProvider: {
+      type: String,
+      enum: ["local", "google", "linkedin"],
+      default: "local",
+    },
+    avatar: { type: String, default: "" },
 
     // Profile details
     headline: { type: String, default: "" },

@@ -19,6 +19,7 @@ from sklearn.metrics.pairwise import cosine_similarity
 import numpy as np
 
 from .skill_ontology import normalize_skills_list, normalize_skill
+from .skill_domains import classify_user_domains, classify_job_domain, domain_alignment_score
 
 logger = logging.getLogger(__name__)
 
@@ -234,6 +235,8 @@ class JobMatcher:
         if not user_skills and not cv_text:
             logger.warning("No user skills or CV text provided — returning neutral scores.")
 
+        user_domains = classify_user_domains(user_skills)
+
         # ── Step 1: TF-IDF cosine similarity ─────────────────────────────────
         user_doc     = self._build_user_document(user_skills, cv_text)
         user_vector  = self.vectorizer.transform([preprocess_text(user_doc)])
@@ -251,20 +254,35 @@ class JobMatcher:
             growth_score  = self._compute_growth_alignment(job)
             culture_score = self._compute_cultural_fit(user_skills, job)
 
-            # Blend TF-IDF with skill overlap for the "skill match" component
-            # TF-IDF catches semantic matches the ontology might miss
-            blended_skill = 0.6 * skill_score + 0.4 * tfidf_sim
+            # Domain alignment — tech users rank tech jobs higher, etc.
+            job_domains = classify_job_domain(job)
+            domain_score = domain_alignment_score(user_domains, job_domains)
 
-            # Weighted composite — per spec: 40/30/20/10
+            # Blend TF-IDF with skill overlap for the "skill match" component
+            blended_skill = 0.6 * skill_score + 0.4 * tfidf_sim
+            blended_skill = min(1.0, blended_skill * (0.35 + 0.65 * domain_score))
+
+            # Dynamic weights: stronger skill overlap → more weight on skills
+            skill_weight = 0.32 + 0.18 * blended_skill
+            exp_weight = 0.28
+            growth_weight = 0.22
+            culture_weight = 0.18
+            total_w = skill_weight + exp_weight + growth_weight + culture_weight
+            skill_weight /= total_w
+            exp_weight /= total_w
+            growth_weight /= total_w
+            culture_weight /= total_w
+
             composite = (
-                0.40 * blended_skill  +
-                0.30 * exp_score      +
-                0.20 * growth_score   +
-                0.10 * culture_score
+                skill_weight * blended_skill +
+                exp_weight * exp_score +
+                growth_weight * growth_score +
+                culture_weight * culture_score
             )
 
-            # Convert to 0–100 integer percentage
             match_score = min(int(round(composite * 100)), 99)
+            if domain_score < 0.25 and blended_skill < 0.2:
+                match_score = min(match_score, 35)
 
             # Which skills matched / are missing?
             user_norm = set(normalize_skills_list(user_skills))
@@ -280,6 +298,7 @@ class JobMatcher:
                     "experience_fit": int(round(exp_score * 100)),
                     "growth_align":  int(round(growth_score * 100)),
                     "cultural_fit":  int(round(culture_score * 100)),
+                    "domain_align":  int(round(domain_score * 100)),
                     "tfidf_sim":     round(tfidf_sim, 4),
                 },
                 "matched_skills": matched_skills,

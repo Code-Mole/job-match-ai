@@ -42,6 +42,14 @@ export function AuthProvider({ children }) {
     return data
   }
 
+  const completeOAuthLogin = async (token) => {
+    localStorage.setItem('token', token)
+    axios.defaults.headers.common['Authorization'] = `Bearer ${token}`
+    const { data } = await axios.get('/api/auth/me')
+    setUser(data.user)
+    return data.user
+  }
+
   const register = async (name, email, password) => {
     const { data } = await axios.post('/api/auth/register', { name, email, password })
     localStorage.setItem('token', data.token)
@@ -63,7 +71,7 @@ export function AuthProvider({ children }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout, updateProfile, refreshUser }}>
+    <AuthContext.Provider value={{ user, loading, login, register, logout, updateProfile, refreshUser, completeOAuthLogin }}>
       {children}
     </AuthContext.Provider>
   )

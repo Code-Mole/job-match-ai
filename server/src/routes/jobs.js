@@ -351,6 +351,36 @@ router.post('/seed', async (req, res, next) => {
 })
 
 
+// ── GET /api/jobs/my/applied — User's applied jobs ───────────────────────────
+router.get('/my/applied', protect, async (req, res, next) => {
+  try {
+    const user = await User.findById(req.user._id)
+      .populate({ path: 'appliedJobs.job', match: { isActive: true } })
+      .lean()
+
+    const applications = (user.appliedJobs || [])
+      .filter((a) => a.job)
+      .map((a) => ({
+        ...a.job,
+        appliedAt: a.appliedAt,
+        status: a.status,
+      }))
+
+    res.json({ success: true, jobs: dedupeJobs(applications) })
+  } catch (err) { next(err) }
+})
+
+// ── GET /api/jobs/my/saved — User's saved jobs ────────────────────────────────
+router.get('/my/saved', protect, async (req, res, next) => {
+  try {
+    const user = await User.findById(req.user._id)
+      .populate({ path: 'savedJobs', match: { isActive: true } })
+      .lean()
+
+    res.json({ success: true, jobs: dedupeJobs(user.savedJobs || []) })
+  } catch (err) { next(err) }
+})
+
 // ── GET /api/jobs/:id — Single job ───────────────────────────────────────────
 router.get('/:id', async (req, res, next) => {
   try {

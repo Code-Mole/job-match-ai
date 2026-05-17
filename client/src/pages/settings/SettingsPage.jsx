@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect } from "react"
 import { User, Bell, Shield, Trash2, Save, Eye, EyeOff, Check, Mail } from 'lucide-react'
 import AppLayout from '../../components/layouts/AppLayout'
 import { useAuth } from '../../context/AuthContext'
@@ -16,7 +16,7 @@ const TABS = [
 // ── Reusable section wrapper ──────────────────────────────────────────────────
 function Section({ title, description, children }) {
   return (
-    <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-white/8 overflow-hidden">
+    <div className="surface-card rounded-2xl overflow-hidden">
       <div className="px-6 py-5 border-b border-slate-100 dark:border-white/5">
         <h3 className="font-semibold text-slate-900 dark:text-slate-100">{title}</h3>
         {description && <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">{description}</p>}
@@ -29,16 +29,21 @@ function Section({ title, description, children }) {
 // ── Toggle row ────────────────────────────────────────────────────────────────
 function ToggleRow({ label, description, value, onChange }) {
   return (
-    <div className="flex items-center justify-between py-3 border-b border-slate-100 dark:border-white/5 last:border-0">
-      <div>
+    <div className="flex items-center justify-between gap-4 py-3 border-b border-slate-100 dark:border-white/5 last:border-0">
+      <div className="min-w-0 flex-1">
         <p className="text-sm font-medium text-slate-800 dark:text-slate-200">{label}</p>
         {description && <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{description}</p>}
       </div>
       <button
+        type="button"
+        role="switch"
+        aria-checked={value}
         onClick={() => onChange(!value)}
-        className={`relative w-11 h-6 rounded-full transition-colors duration-200 flex-shrink-0 ${value ? 'bg-blue-600' : 'bg-slate-300 dark:bg-slate-600'}`}
+        className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full overflow-hidden transition-colors duration-200 ${value ? 'bg-blue-600' : 'bg-slate-300 dark:bg-slate-600'}`}
       >
-        <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow-sm transition-transform duration-200 ${value ? 'translate-x-5' : 'translate-x-0.5'}`} />
+        <span
+          className={`inline-block h-5 w-5 rounded-full bg-white shadow-sm transition-transform duration-200 ${value ? 'translate-x-[1.375rem]' : 'translate-x-0.5'}`}
+        />
       </button>
     </div>
   )
@@ -387,8 +392,18 @@ function DangerTab() {
 }
 
 // ── Main ──────────────────────────────────────────────────────────────────────
+const TAB_IDS = new Set(TABS.map((t) => t.id))
+
 export default function SettingsPage() {
-  const [activeTab, setActiveTab] = useState('account')
+  const [activeTab, setActiveTab] = useState(() => {
+    const tab = new URLSearchParams(window.location.search).get('tab')
+    return TAB_IDS.has(tab) ? tab : 'account'
+  })
+
+  useEffect(() => {
+    const tab = new URLSearchParams(window.location.search).get('tab')
+    if (tab && TAB_IDS.has(tab)) setActiveTab(tab)
+  }, [])
 
   return (
     <AppLayout>

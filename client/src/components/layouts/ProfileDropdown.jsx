@@ -73,9 +73,9 @@ export default function ProfileDropdown() {
     {
       icon: Briefcase,
       label: "Applied jobs",
-      action: () => go("/jobs?filter=applied"),
+      action: () => go("/jobs/applied"),
     },
-    { icon: Star, label: "Saved jobs", action: () => go("/jobs?filter=saved") },
+    { icon: Star, label: "Saved jobs", action: () => go("/jobs/saved") },
     { icon: Settings, label: "Settings", action: () => go("/settings") },
   ];
 

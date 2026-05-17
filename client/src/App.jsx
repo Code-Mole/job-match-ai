@@ -2,6 +2,8 @@ import { Routes, Route, Navigate } from "react-router-dom";
 import { useAuth } from "./context/AuthContext";
 import LoginPage from "./pages/auth/LoginPage";
 import SignupPage from "./pages/auth/SignupPage";
+import AuthCallbackPage from "./pages/auth/AuthCallbackPage";
+import MyJobsPage from "./pages/jobs/MyJobsPage";
 import DashboardPage from "./pages/dashboard/DashboardPage";
 import JobsPage from "./pages/jobs/JobsPage";
 import JobDetailPage from "./pages/jobs/JobDetailPage";
@@ -29,6 +31,7 @@ export default function App() {
     <Routes>
       <Route path="/login" element={<LoginPage />} />
       <Route path="/signup" element={<SignupPage />} />
+      <Route path="/auth/callback" element={<AuthCallbackPage />} />
 
       <Route
         path="/"
@@ -43,6 +46,22 @@ export default function App() {
         element={
           <ProtectedRoute>
             <JobsPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/jobs/applied"
+        element={
+          <ProtectedRoute>
+            <MyJobsPage variant="applied" />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/jobs/saved"
+        element={
+          <ProtectedRoute>
+            <MyJobsPage variant="saved" />
           </ProtectedRoute>
         }
       />

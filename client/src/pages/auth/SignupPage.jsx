@@ -12,6 +12,8 @@ import {
 import { useAuth } from "../../context/AuthContext";
 import ThemeToggle from "../../components/ui/ThemeToggle";
 
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
+
 function GoogleIcon() {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24">
@@ -305,6 +307,8 @@ export default function SignupPage() {
 
         <div className="grid grid-cols-2 gap-3">
           <button
+            type="button"
+            onClick={() => { window.location.href = `${API_BASE}/api/auth/google`; }}
             className="
             flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-sm font-medium
             bg-white border border-slate-200 text-slate-700
@@ -315,6 +319,8 @@ export default function SignupPage() {
             <GoogleIcon /> Google
           </button>
           <button
+            type="button"
+            onClick={() => { window.location.href = `${API_BASE}/api/auth/linkedin`; }}
             className="
             flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-sm font-medium
             bg-white border border-slate-200 text-slate-700

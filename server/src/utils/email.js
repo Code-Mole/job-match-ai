@@ -6,30 +6,64 @@ export function isSmtpConfigured() {
   return Boolean(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS);
 }
 
+function smtpPort() {
+  return parseInt(process.env.SMTP_PORT || "587", 10);
+}
+
+function buildTransportOptions() {
+  const port = smtpPort();
+  const secure =
+    process.env.SMTP_SECURE === "true" || port === 465;
+
+  return {
+    host: process.env.SMTP_HOST,
+    port,
+    secure,
+    auth: {
+      user: process.env.SMTP_USER,
+      pass: process.env.SMTP_PASS,
+    },
+    requireTLS: !secure && port === 587,
+    tls: {
+      minVersion: "TLSv1.2",
+      rejectUnauthorized: process.env.SMTP_TLS_REJECT_UNAUTHORIZED !== "false",
+    },
+    connectionTimeout: 20000,
+    greetingTimeout: 20000,
+    socketTimeout: 30000,
+  };
+}
+
 export function getTransporter() {
   if (!isSmtpConfigured()) return null;
   if (!transporter) {
-    transporter = nodemailer.createTransport({
-      host: process.env.SMTP_HOST,
-      port: parseInt(process.env.SMTP_PORT || "587", 10),
-      secure: process.env.SMTP_SECURE === "true",
-      auth: {
-        user: process.env.SMTP_USER,
-        pass: process.env.SMTP_PASS,
-      },
-    });
+    transporter = nodemailer.createTransport(buildTransportOptions());
   }
   return transporter;
 }
 
+export function resetTransporter() {
+  transporter = null;
+}
+
 export async function verifySmtpConnection() {
+  resetTransporter();
   const t = getTransporter();
   if (!t) {
     throw new Error(
       "SMTP is not configured. Set SMTP_HOST, SMTP_USER, and SMTP_PASS in server/.env",
     );
   }
-  await t.verify();
+  try {
+    await t.verify();
+  } catch (err) {
+    resetTransporter();
+    const hint =
+      smtpPort() === 587
+        ? " For Gmail use SMTP_PORT=587, SMTP_SECURE=false. For port 465 use SMTP_SECURE=true."
+        : "";
+    throw new Error(`${err.message || "SMTP connection failed."}${hint}`);
+  }
   return true;
 }
 
@@ -38,13 +72,18 @@ export async function sendMail({ to, subject, html, text }) {
   if (!t) {
     throw new Error("SMTP is not configured.");
   }
-  return t.sendMail({
-    from: `"JobMatch AI" <${process.env.SMTP_FROM || process.env.SMTP_USER}>`,
-    to,
-    subject,
-    html,
-    text,
-  });
+  try {
+    return await t.sendMail({
+      from: `"JobMatch AI" <${process.env.SMTP_FROM || process.env.SMTP_USER}>`,
+      to,
+      subject,
+      html,
+      text,
+    });
+  } catch (err) {
+    resetTransporter();
+    throw err;
+  }
 }
 
 export async function sendApplicationEmail(user, job) {

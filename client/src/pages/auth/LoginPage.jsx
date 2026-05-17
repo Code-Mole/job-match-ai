@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { Mail, Lock, Eye, EyeOff, AlertCircle } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import ThemeToggle from "../../components/ui/ThemeToggle";
@@ -37,14 +37,22 @@ function LinkedInIcon() {
   );
 }
 
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
+
 export default function LoginPage() {
   const navigate = useNavigate();
   const { login } = useAuth();
+  const [searchParams] = useSearchParams();
 
   const [form, setForm] = useState({ email: "", password: "" });
   const [showPass, setShowPass] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    const oauthError = searchParams.get("error");
+    if (oauthError) setError(decodeURIComponent(oauthError));
+  }, [searchParams]);
 
   const handleChange = (e) => {
     setError("");
@@ -200,6 +208,8 @@ export default function LoginPage() {
         {/* Social buttons */}
         <div className="grid grid-cols-2 gap-3">
           <button
+            type="button"
+            onClick={() => { window.location.href = `${API_BASE}/api/auth/google`; }}
             className="
             flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-sm font-medium
             bg-white border border-slate-200 text-slate-700
@@ -210,6 +220,8 @@ export default function LoginPage() {
             <GoogleIcon /> Google
           </button>
           <button
+            type="button"
+            onClick={() => { window.location.href = `${API_BASE}/api/auth/linkedin`; }}
             className="
             flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-sm font-medium
             bg-white border border-slate-200 text-slate-700

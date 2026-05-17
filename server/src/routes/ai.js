@@ -35,10 +35,33 @@ function resolveChatProvider() {
   if (explicit === "openai" || explicit === "grok" || explicit === "anthropic") {
     return explicit;
   }
+  // Prefer OpenAI (ChatGPT) and Grok; Anthropic only when explicitly configured
   if (process.env.OPENAI_API_KEY) return "openai";
   if (process.env.XAI_API_KEY) return "grok";
-  if (process.env.ANTHROPIC_API_KEY) return "anthropic";
+  if (process.env.ANTHROPIC_API_KEY && process.env.CHAT_PROVIDER === "anthropic") {
+    return "anthropic";
+  }
   return null;
+}
+
+function parseProviderError(err, provider) {
+  const raw = err?.message || String(err);
+  try {
+    const parsed = JSON.parse(raw);
+    const msg = parsed?.error?.message || parsed?.message;
+    if (msg) {
+      if (/credit balance|billing|quota|insufficient/i.test(msg)) {
+        return `Your ${provider} account has no credits. Add OPENAI_API_KEY (ChatGPT) or XAI_API_KEY (Grok) in server/.env and set CHAT_PROVIDER=openai or CHAT_PROVIDER=grok.`;
+      }
+      return msg;
+    }
+  } catch {
+    /* not JSON */
+  }
+  if (/credit balance|billing|quota/i.test(raw)) {
+    return `AI provider billing issue. Set CHAT_PROVIDER=openai with OPENAI_API_KEY, or CHAT_PROVIDER=grok with XAI_API_KEY in server/.env.`;
+  }
+  return raw;
 }
 
 /**
@@ -271,14 +294,14 @@ router.post("/chat", protect, async (req, res, next) => {
       res.write("data: [DONE]\n\n");
       res.end();
     } catch (err) {
+      const friendly = parseProviderError(err, provider);
       if (res.headersSent) {
-        res.write(
-          `data: ${JSON.stringify({
-            error: err.message || "Stream interrupted.",
-          })}\n\n`,
-        );
+        res.write(`data: ${JSON.stringify({ error: friendly })}\n\n`);
+        res.write("data: [DONE]\n\n");
         return res.end();
       }
+      err.message = friendly;
+      err.status = err.status || 502;
       throw err;
     }
   } catch (err) {
@@ -288,7 +311,10 @@ router.post("/chat", protect, async (req, res, next) => {
           "Invalid API key for the configured AI provider. Check your .env file.",
       });
     }
-    next(err);
+    const status = err.status >= 400 && err.status < 600 ? err.status : 502;
+    return res.status(status).json({
+      message: err.message || "AI chat request failed.",
+    });
   }
 });
 

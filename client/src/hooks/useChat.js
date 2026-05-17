@@ -149,9 +149,10 @@ export function useChat() {
     } catch (err) {
       if (err.name === 'AbortError') return
 
-      const fallback = err.message?.includes('API key')
-        ? err.message
-        : 'I encountered an error. Please check that the server is running and your API key is set in server/.env, then try again.'
+      const msg = err.message || ''
+      const fallback = msg.includes('API key') || msg.includes('credit') || msg.includes('CHAT_PROVIDER') || msg.includes('billing')
+        ? msg
+        : msg || 'I encountered an error. Please check that the server is running and set OPENAI_API_KEY or XAI_API_KEY with CHAT_PROVIDER in server/.env.'
 
       setMessages(prev =>
         prev.map(m => m.id === assistantId

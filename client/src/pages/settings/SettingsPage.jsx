@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { User, Bell, Shield, Trash2, Save, Eye, EyeOff, Check } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { User, Bell, Shield, Trash2, Save, Eye, EyeOff, Check, Mail } from 'lucide-react'
 import AppLayout from '../../components/layouts/AppLayout'
 import { useAuth } from '../../context/AuthContext'
 import { useToast } from '../../components/ui/Toast'
@@ -9,6 +9,7 @@ const TABS = [
   { id: 'account',       label: 'Account',       icon: User    },
   { id: 'notifications', label: 'Notifications', icon: Bell    },
   { id: 'privacy',       label: 'Privacy',       icon: Shield  },
+  { id: 'email',         label: 'Email (SMTP)',  icon: Mail    },
   { id: 'danger',        label: 'Danger zone',   icon: Trash2  },
 ]
 
@@ -158,6 +159,7 @@ function AccountTab() {
 
 // ── Notifications tab ─────────────────────────────────────────────────────────
 function NotificationsTab() {
+  const { user, refreshUser } = useAuth()
   const toast = useToast()
   const [prefs, setPrefs] = useState({
     jobMatches:   true,
@@ -169,12 +171,19 @@ function NotificationsTab() {
   })
   const [saving, setSaving] = useState(false)
 
+  useEffect(() => {
+    if (user?.notificationPrefs) {
+      setPrefs((p) => ({ ...p, ...user.notificationPrefs }))
+    }
+  }, [user])
+
   const toggle = (key) => setPrefs(p => ({ ...p, [key]: !p[key] }))
 
   const save = async () => {
     setSaving(true)
     try {
       await axios.put('/api/auth/profile', { notificationPrefs: prefs })
+      await refreshUser?.()
       toast('Notification preferences saved', 'success')
     } catch {
       toast('Failed to save preferences', 'error')
@@ -207,12 +216,20 @@ function NotificationsTab() {
 
 // ── Privacy tab ───────────────────────────────────────────────────────────────
 function PrivacyTab() {
+  const { user, refreshUser } = useAuth()
   const toast = useToast()
   const [prefs, setPrefs] = useState({ profileVisible: true, showSalaryExpectation: false, allowRecruiterContact: true, dataAnalytics: true })
   const toggle = (key) => setPrefs(p => ({ ...p, [key]: !p[key] }))
+
+  useEffect(() => {
+    if (user?.privacyPrefs) {
+      setPrefs((p) => ({ ...p, ...user.privacyPrefs }))
+    }
+  }, [user])
   const save = async () => {
     try {
       await axios.put('/api/auth/profile', { privacyPrefs: prefs })
+      await refreshUser?.()
       toast('Privacy settings saved', 'success')
     } catch { toast('Failed to save', 'error') }
   }
@@ -232,6 +249,64 @@ function PrivacyTab() {
           <Check size={15} /> Save settings
         </button>
       </div>
+    </div>
+  )
+}
+
+// ── Email / SMTP tab ──────────────────────────────────────────────────────────
+function EmailTab() {
+  const toast = useToast()
+  const [status, setStatus] = useState(null)
+  const [testing, setTesting] = useState(false)
+
+  useEffect(() => {
+    axios.get('/api/auth/settings/email-status')
+      .then(({ data }) => setStatus(data))
+      .catch(() => setStatus({ configured: false }))
+  }, [])
+
+  const sendTest = async () => {
+    setTesting(true)
+    try {
+      const { data } = await axios.post('/api/auth/settings/test-email')
+      toast(data.message || 'Test email sent', 'success')
+    } catch (err) {
+      toast(err.response?.data?.message || 'SMTP test failed', 'error')
+    } finally { setTesting(false) }
+  }
+
+  return (
+    <div className="space-y-5">
+      <Section
+        title="Application confirmation emails"
+        description="SMTP for application confirmation emails (use Gmail, Resend, or Mailgun). Configure these in server/.env — the app reads them at startup."
+      >
+        <div className={`p-4 rounded-xl text-sm ${status?.configured ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/50' : 'bg-amber-50 dark:bg-amber-900/20 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-700/50'}`}>
+          {status?.configured
+            ? `✓ SMTP is configured (${status.host}). Emails send from ${status.from || 'your SMTP user'}.`
+            : 'SMTP is not configured. Add SMTP_HOST, SMTP_USER, and SMTP_PASS to server/.env'}
+        </div>
+
+        <div className="mt-4 space-y-2 text-sm text-slate-600 dark:text-slate-400 font-mono bg-slate-50 dark:bg-slate-900/50 p-4 rounded-xl">
+          <p>SMTP_HOST=smtp.gmail.com</p>
+          <p>SMTP_PORT=587</p>
+          <p>SMTP_USER=your-email@gmail.com</p>
+          <p>SMTP_PASS=your-app-password</p>
+          <p className="text-xs font-sans text-slate-500 pt-2">For Gmail: use an App Password (2FA required). Resend/Mailgun: use their SMTP host and API key as password.</p>
+        </div>
+
+        <div className="mt-4 flex flex-wrap gap-3">
+          <button
+            type="button"
+            onClick={sendTest}
+            disabled={testing || !status?.configured}
+            className="btn-primary flex items-center gap-2 px-5 disabled:opacity-50"
+          >
+            {testing ? <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <Mail size={15} />}
+            Send test email to my account
+          </button>
+        </div>
+      </Section>
     </div>
   )
 }
@@ -348,6 +423,7 @@ export default function SettingsPage() {
             {activeTab === 'account'       && <AccountTab />}
             {activeTab === 'notifications' && <NotificationsTab />}
             {activeTab === 'privacy'       && <PrivacyTab />}
+            {activeTab === 'email'         && <EmailTab />}
             {activeTab === 'danger'        && <DangerTab />}
           </div>
         </div>

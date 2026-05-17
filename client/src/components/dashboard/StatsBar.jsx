@@ -21,7 +21,11 @@ export default function StatsBar({ stats }) {
       icon:   TrendingUp,
       label:  'Profile strength',
       value:  stats?.profileStrength != null ? `${stats.profileStrength}%` : '—',
-      sub:    stats?.cvParsed ? 'CV analysed ✓' : 'Upload CV to boost',
+      sub:    stats?.cvParsed
+        ? stats?.avgMatchScore != null
+          ? `Avg job match ${stats.avgMatchScore}%`
+          : 'CV analysed ✓'
+        : 'Upload CV to boost',
       color:  'amber',
     },
     {

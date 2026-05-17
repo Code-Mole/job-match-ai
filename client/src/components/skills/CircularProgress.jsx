@@ -59,7 +59,6 @@ export default function CircularProgress({
         : "#ef4444"; // red
 
   const trackColor = "var(--tw-ring-color, #e2e8f0)";
-  const bgRing = "currentColor";
 
   // Glow intensity scales with score
   const glowOpacity = (displayed / 100) * 0.3;
@@ -90,9 +89,8 @@ export default function CircularProgress({
             cy={center}
             r={radius}
             fill="none"
-            stroke="currentColor"
+            stroke={trackColor}
             strokeWidth={strokeWidth}
-            className="text-slate-200 dark:text-slate-700"
           />
 
           {/* Progress arc — rotated so it starts at top */}

@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Copy, Check } from 'lucide-react'
 
 // Render markdown-lite: **bold**, bullet lists, tables
-function renderContent(text, streaming) {
+function renderContent(text) {
   const lines = text.split('\n')
   return lines.map((line, i) => {
     // Bold
@@ -67,7 +67,7 @@ export default function MessageBubble({ message }) {
           }
         `}>
           <div className="whitespace-pre-wrap">
-            {renderContent(message.content, isStream)}
+            {renderContent(message.content)}
             {/* Blinking cursor while streaming */}
             {isStream && (
               <span className="inline-block w-0.5 h-4 bg-blue-600 dark:bg-blue-400 ml-0.5 animate-pulse align-middle" />

@@ -133,8 +133,8 @@ function JobDetailSkeleton() {
 export default function JobDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { user, updateProfile } = useAuth();
-  const { job, gap, loading, error } = useJob(id);
+  const { user } = useAuth();
+  const { job, gap, matchScore: apiMatchScore, componentScores: apiComponentScores, loading, error } = useJob(id);
 
   const [saved, setSaved] = useState(() => user?.savedJobs?.includes(id));
   const [applied, setApplied] = useState(false);
@@ -220,10 +220,10 @@ export default function JobDetailPage() {
   }
 
   // Extract match data
-  const matchScore = gap?.overall_readiness ?? job.matchScore ?? null;
+  const matchScore = gap?.overall_readiness ?? apiMatchScore ?? job?.matchScore ?? null;
   const matchedSkills = gap?.matched_skills ?? job.matchedSkills ?? [];
   const missingSkills = gap?.missing_skills ?? job.missingSkills ?? [];
-  const componentScores = job.componentScores || null;
+  const componentScores = gap?.component_scores ?? apiComponentScores ?? job?.componentScores ?? null;
 
   // Logo color from company name
   const logoColors = [

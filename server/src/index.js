@@ -16,16 +16,16 @@ dotenv.config();
 // ── Connect to MongoDB ────────────────────────────────────────────────────────
 connectDB();
 
-import { syncJobs } from './services/jobsApiService.js'
+import { syncJobs } from "./services/jobsApiService.js";
 
 // Sync jobs 30s after startup (give DB time to connect)
 setTimeout(async () => {
   try {
-    await syncJobs()
+    await syncJobs();
   } catch (err) {
-    console.error('Startup job sync failed:', err.message)
+    console.error("Startup job sync failed:", err.message);
   }
-}, 30000)
+}, 30000);
 
 const app = express();
 const PORT = process.env.PORT || 5000;

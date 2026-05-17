@@ -16,7 +16,9 @@ export default function StarRating({
     try {
       await axios.post("/api/feedback", { type, rating, referenceId });
       setSubmitted(true);
-    } catch {}
+    } catch {
+      /* feedback is best-effort */
+    }
   };
 
   if (submitted)

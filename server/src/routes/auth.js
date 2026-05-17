@@ -1,8 +1,15 @@
 import express from "express";
 import bcrypt from "bcryptjs";
+import axios from "axios";
 import User from "../models/User.js";
+import Job from "../models/Job.js";
 import { protect } from "../middleware/auth.js";
 import { signToken, sendAuthResponse } from "../utils/jwt.js";
+import {
+  isSmtpConfigured,
+  verifySmtpConnection,
+  sendMail,
+} from "../utils/email.js";
 
 const router = express.Router();
 // ── POST /api/auth/register ───────────────────────────────────────────────────
@@ -129,6 +136,8 @@ router.put("/profile", protect, async (req, res, next) => {
       "experience",
       "education",
       "preferences",
+      "notificationPrefs",
+      "privacyPrefs",
     ];
     const updates = {};
     for (const key of allowed) {
@@ -201,7 +210,7 @@ router.get('/export', protect, async (req, res, next) => {
 router.get('/stats', protect, async (req, res, next) => {
   try {
     const user = req.user
-    const Job  = require('../models/Job')
+    const AI_URL = process.env.AI_SERVICE_URL || 'http://localhost:8000'
 
     const [totalJobs, appliedCount, savedCount] = await Promise.all([
       Job.countDocuments({ isActive: true }),
@@ -209,24 +218,91 @@ router.get('/stats', protect, async (req, res, next) => {
       user.savedJobs?.length   || 0,
     ])
 
+    let avgMatchScore = null
+    let topMatchScore = null
+
+    if (user.skills?.length) {
+      try {
+        const jobs = await Job.find({ isActive: true }).lean().limit(100)
+        if (jobs.length) {
+          try {
+            await axios.post(`${AI_URL}/load-jobs`, { jobs }, { timeout: 8000 })
+          } catch { /* non-fatal */ }
+
+          const { data: aiData } = await axios.post(
+            `${AI_URL}/match`,
+            { skills: user.skills, years_exp: user.yearsExp || 0, top_n: 10 },
+            { timeout: 12000 },
+          )
+          const scores = (aiData.matches || [])
+            .map((m) => m.match_score)
+            .filter((s) => typeof s === 'number')
+          if (scores.length) {
+            avgMatchScore = Math.round(
+              scores.reduce((a, b) => a + b, 0) / scores.length,
+            )
+            topMatchScore = Math.max(...scores)
+          }
+        }
+      } catch { /* AI optional */ }
+    }
+
+    const skillPts = Math.min(30, (user.skills?.length || 0) * 3)
+    const profileStrength = Math.min(
+      100,
+      Math.round(
+        (user.cvParsed ? 35 : 0) +
+        skillPts +
+        (user.experience?.length > 0 ? 15 : 0) +
+        (user.headline ? 8 : 0) +
+        (user.bio ? 8 : 0) +
+        (user.location ? 4 : 0) +
+        (avgMatchScore ? Math.min(10, Math.round(avgMatchScore / 10)) : 0),
+      ),
+    )
+
     res.json({
-      success:       true,
+      success: true,
       totalJobs,
       appliedCount,
       savedCount,
-      skillCount:    user.skills?.length    || 0,
-      cvParsed:      user.cvParsed          || false,
-      profileStrength: Math.min(100, Math.round(
-        (user.name         ? 15 : 0) +
-        (user.headline     ? 10 : 0) +
-        (user.bio          ? 10 : 0) +
-        (user.location     ? 10 : 0) +
-        (user.cvParsed     ? 25 : 0) +
-        (user.skills?.length > 3 ? 20 : (user.skills?.length || 0) * 5) +
-        (user.experience?.length > 0 ? 10 : 0)
-      )),
+      skillCount: user.skills?.length || 0,
+      cvParsed: user.cvParsed || false,
+      profileStrength,
+      avgMatchScore,
+      topMatchScore,
+      smtpConfigured: isSmtpConfigured(),
     })
   } catch (err) { next(err) }
+})
+
+// ── GET /api/auth/settings/email-status ─────────────────────────────────────
+router.get('/settings/email-status', protect, async (req, res) => {
+  res.json({
+    success: true,
+    configured: isSmtpConfigured(),
+    host: process.env.SMTP_HOST || null,
+    from: process.env.SMTP_FROM || process.env.SMTP_USER || null,
+  })
+})
+
+// ── POST /api/auth/settings/test-email ────────────────────────────────────────
+router.post('/settings/test-email', protect, async (req, res, next) => {
+  try {
+    await verifySmtpConnection()
+    await sendMail({
+      to: req.user.email,
+      subject: 'JobMatch AI — SMTP test successful',
+      html: `<p>Hi ${req.user.name?.split(' ')[0] || 'there'},</p><p>Your SMTP settings are working. Application confirmation emails will be delivered to this address.</p>`,
+      text: 'Your JobMatch AI SMTP settings are working.',
+    })
+    res.json({ success: true, message: `Test email sent to ${req.user.email}` })
+  } catch (err) {
+    res.status(400).json({
+      success: false,
+      message: err.message || 'SMTP test failed. Check server/.env credentials.',
+    })
+  }
 })
 
 export default router;

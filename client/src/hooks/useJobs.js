@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import axios from "axios";
 import { useToast } from '../components/ui/Toast'
+import { dedupeJobs } from '../utils/dedupeJobs'
 
 const DEFAULT_FILTERS = {
   search: "",
@@ -50,7 +51,7 @@ export function useJobs() {
         else if (f.sort === "recent") params.set("sort", "-postedAt");
 
         const { data } = await axios.get(`/api/jobs?${params}`);
-        setJobs(data.jobs || []);
+        setJobs(dedupeJobs(data.jobs || []));
         setTotal(data.total || 0);
         setPages(data.pages || 1);
       } catch (err) {

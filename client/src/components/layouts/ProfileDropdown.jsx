@@ -83,18 +83,19 @@ export default function ProfileDropdown() {
     <div className="relative" ref={ref}>
       {/* Trigger button */}
       <button
+        type="button"
         onClick={() => setOpen((p) => !p)}
-        className="flex items-center gap-2 pl-1 pr-2 py-1 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-all group"
+        className="h-10 flex items-center gap-1.5 pl-1 pr-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-all"
         aria-expanded={open}
         aria-haspopup="true"
       >
-        <Avatar name={user?.name} />
-        <span className="hidden sm:block text-sm font-medium text-slate-700 dark:text-slate-300 max-w-[120px] truncate">
+        <Avatar name={user?.name} size="sm" />
+        <span className="hidden lg:block text-sm font-medium text-slate-700 dark:text-slate-300 max-w-[100px] truncate">
           {user?.name?.split(" ")[0] || "Account"}
         </span>
         <ChevronDown
           size={14}
-          className={`text-slate-400 transition-transform duration-200 ${open ? "rotate-180" : ""}`}
+          className={`hidden lg:block text-slate-400 transition-transform duration-200 ${open ? "rotate-180" : ""}`}
         />
       </button>
 

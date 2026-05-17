@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react'
+import { useState, useCallback, useRef, useEffect } from 'react'
 import { useAuth } from '../context/AuthContext'
 
 export const SUGGESTED_PROMPTS = [
@@ -7,7 +7,7 @@ export const SUGGESTED_PROMPTS = [
   { id: 'p3', text: 'Suggest a career path for me',     icon: '🗺️' },
   { id: 'p4', text: 'How do I negotiate my salary?',    icon: '💰' },
   { id: 'p5', text: 'Review my profile and give tips',  icon: '✏️' },
-  { id: 'p6', text: 'Compare Frontend vs Full Stack',   icon: '⚖️' },
+  { id: 'p6', text: 'Compare two career paths for me',  icon: '⚖️' },
 ]
 
 const WELCOME = (name, skills) => {
@@ -31,38 +31,50 @@ export function useChat() {
   const [loading, setLoading]   = useState(false)
   const [error, setError]       = useState(null)
   const abortRef                = useRef(null)
+  const messagesRef             = useRef(messages)
+
+  useEffect(() => {
+    messagesRef.current = messages
+  }, [messages])
 
   const sendMessage = useCallback(async (text) => {
     if (!text?.trim() || loading) return
 
-    // Add user message immediately
     const userMsg = {
       id:        `u-${Date.now()}`,
       role:      'user',
       content:   text.trim(),
       timestamp: new Date(),
     }
-    setMessages(prev => [...prev, userMsg])
-    setLoading(true)
-    setError(null)
 
-    // Add empty assistant message that will be filled by streaming
     const assistantId = `a-${Date.now()}`
-    setMessages(prev => [...prev, {
+
+    const history = messagesRef.current
+      .filter(
+        (m) =>
+          m.content?.trim() &&
+          !m.streaming &&
+          !m.isError &&
+          (m.role === 'user' || m.role === 'assistant'),
+      )
+      .slice(-8)
+      .map((m) => ({ role: m.role, content: m.content }))
+
+    setMessages(prev => [...prev, userMsg, {
       id:        assistantId,
       role:      'assistant',
       content:   '',
       timestamp: new Date(),
       streaming: true,
     }])
+    setLoading(true)
+    setError(null)
 
-    // Abort previous request if any
     if (abortRef.current) abortRef.current.abort()
     abortRef.current = new AbortController()
 
     try {
       const token = localStorage.getItem('token')
-      const history = messages.slice(-8).map(m => ({ role: m.role, content: m.content }))
 
       const response = await fetch(
         `${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/ai/chat`,
@@ -82,28 +94,33 @@ export function useChat() {
         throw new Error(errData.message || `Server error ${response.status}`)
       }
 
-      // Read SSE stream
-      const reader  = response.body.getReader()
+      const reader  = response.body?.getReader()
+      if (!reader) throw new Error('No response stream from server')
+
       const decoder = new TextDecoder()
-      let   fullText = ''
+      let fullText = ''
+      let sseBuffer = ''
 
       while (true) {
         const { done, value } = await reader.read()
         if (done) break
 
-        const chunk = decoder.decode(value, { stream: true })
-        const lines = chunk.split('\n')
+        sseBuffer += decoder.decode(value, { stream: true })
+        const lines = sseBuffer.split('\n')
+        sseBuffer = lines.pop() ?? ''
 
-        for (const line of lines) {
-          if (!line.startsWith('data: ')) continue
-          const payload = line.slice(6).trim()
-          if (payload === '[DONE]') break
+        for (const rawLine of lines) {
+          const line = rawLine.trim()
+          if (!line.startsWith('data:')) continue
+
+          const payload = line.replace(/^data:\s*/, '').trim()
+          if (payload === '[DONE]') continue
+
           try {
             const parsed = JSON.parse(payload)
             if (parsed.error) throw new Error(parsed.error)
             if (parsed.text) {
               fullText += parsed.text
-              // Update the streaming message token-by-token
               setMessages(prev =>
                 prev.map(m => m.id === assistantId
                   ? { ...m, content: fullText }
@@ -112,17 +129,19 @@ export function useChat() {
               )
             }
           } catch (parseErr) {
-            if (parseErr.message !== 'Unexpected end of JSON input') {
-              console.warn('SSE parse error:', parseErr.message)
+            if (parseErr.message && !parseErr.message.includes('JSON')) {
+              throw parseErr
             }
           }
         }
       }
 
-      // Mark streaming as complete
+      const finalContent = fullText.trim()
+        || 'I could not generate a reply. Please verify your AI API key in server/.env (OPENAI_API_KEY, XAI_API_KEY, or ANTHROPIC_API_KEY) and try again.'
+
       setMessages(prev =>
         prev.map(m => m.id === assistantId
-          ? { ...m, content: fullText || 'Sorry, I received an empty response. Please try again.', streaming: false }
+          ? { ...m, content: finalContent, streaming: false }
           : m
         )
       )
@@ -130,7 +149,10 @@ export function useChat() {
     } catch (err) {
       if (err.name === 'AbortError') return
 
-      const fallback = 'I encountered an error. Please check that the server is running and your API key is set, then try again.'
+      const fallback = err.message?.includes('API key')
+        ? err.message
+        : 'I encountered an error. Please check that the server is running and your API key is set in server/.env, then try again.'
+
       setMessages(prev =>
         prev.map(m => m.id === assistantId
           ? { ...m, content: fallback, streaming: false, isError: true }
@@ -141,7 +163,7 @@ export function useChat() {
     } finally {
       setLoading(false)
     }
-  }, [messages, loading])
+  }, [loading])
 
   const clearChat = useCallback(() => {
     abortRef.current?.abort()

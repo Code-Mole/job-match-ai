@@ -15,67 +15,9 @@ import SkillTag from "../../components/skills/SkillTag";
 import AddSkillInput from "../../components/skills/AddSkillInput";
 import { Skeleton } from "../../components/ui/LoadingSkeleton";
 import { useSkillGap, useUserSkills } from "../../hooks/useSkillGap";
+import { useMatchedJobs } from "../../hooks/useMatchedJobs";
 import { useAuth } from "../../context/AuthContext";
 import { SKILL_GROUPS } from "../../data/skillsData";
-import axios from "axios";
-
-// ── Sample jobs to run gap analysis against ──────────────────────────────────
-// In a full flow the user picks a job from their saved/matched list
-const SAMPLE_JOBS = [
-  {
-    _id: "1",
-    title: "Senior Frontend Developer",
-    company: "Stripe",
-    skills: [
-      "React",
-      "TypeScript",
-      "JavaScript",
-      "CSS",
-      "GraphQL",
-      "Jest",
-      "REST APIs",
-    ],
-  },
-  {
-    _id: "2",
-    title: "Full Stack Engineer",
-    company: "Vercel",
-    skills: [
-      "React",
-      "Next.js",
-      "Node.js",
-      "PostgreSQL",
-      "TypeScript",
-      "AWS",
-      "Docker",
-    ],
-  },
-  {
-    _id: "3",
-    title: "React Developer",
-    company: "Linear",
-    skills: ["React", "GraphQL", "TypeScript", "CSS", "Jest"],
-  },
-  {
-    _id: "4",
-    title: "ML Engineer",
-    company: "Hugging Face",
-    skills: [
-      "Python",
-      "PyTorch",
-      "NLP",
-      "Machine Learning",
-      "Deep Learning",
-      "Docker",
-    ],
-  },
-  {
-    _id: "5",
-    title: "Backend Engineer",
-    company: "PlanetScale",
-    skills: ["Go", "MySQL", "Kubernetes", "Docker", "REST APIs", "Linux"],
-  },
-];
 
 // ── Loading skeleton for the gap analysis panel ───────────────────────────────
 function GapSkeleton() {
@@ -141,10 +83,21 @@ function ScoreBreakdown({ scores }) {
 // ── Gap Analysis tab ──────────────────────────────────────────────────────────
 function GapAnalysisTab() {
   const { user } = useAuth();
-  const [selectedJobId, setSelectedJobId] = useState(SAMPLE_JOBS[0]._id);
-  const selectedJob = SAMPLE_JOBS.find((j) => j._id === selectedJobId);
+  const { jobs: matchedJobs, loading: jobsLoading, error: jobsError } =
+    useMatchedJobs(12);
+  const [selectedJobId, setSelectedJobId] = useState("");
 
-  const { gap, loading, error, refetch } = useSkillGap(null, selectedJob);
+  const jobList = matchedJobs.length > 0 ? matchedJobs : [];
+  const selectedJob = jobList.find((j) => String(j._id) === String(selectedJobId)) || jobList[0];
+
+  useEffect(() => {
+    if (selectedJob?._id && !selectedJobId) setSelectedJobId(String(selectedJob._id));
+  }, [selectedJob, selectedJobId]);
+
+  const { gap, loading, error, refetch } = useSkillGap(
+    selectedJob?._id,
+    selectedJob,
+  );
 
   // Build skill rows combining gap data with proficiency placeholders
   const matchedSkills = (gap?.matched_skills || []).map((skill) => ({
@@ -170,21 +123,28 @@ function GapAnalysisTab() {
           </label>
           <div className="relative">
             <select
-              value={selectedJobId}
+              value={selectedJobId || selectedJob?._id || ""}
               onChange={(e) => setSelectedJobId(e.target.value)}
+              disabled={jobsLoading || jobList.length === 0}
               className="
                 w-full px-4 py-2.5 rounded-xl text-sm appearance-none
                 bg-slate-100 dark:bg-slate-700
                 border border-slate-200 dark:border-white/10
                 text-slate-900 dark:text-slate-100
                 outline-none focus:border-blue-500 transition-all cursor-pointer
+                disabled:opacity-60
               "
             >
-              {SAMPLE_JOBS.map((job) => (
-                <option key={job._id} value={job._id}>
-                  {job.title} — {job.company}
-                </option>
-              ))}
+              {jobList.length === 0 ? (
+                <option value="">Upload CV to load matched jobs</option>
+              ) : (
+                jobList.map((job) => (
+                  <option key={job._id} value={job._id}>
+                    {job.title} — {job.company}
+                    {job.match_score != null ? ` (${job.match_score}% match)` : ""}
+                  </option>
+                ))
+              )}
             </select>
             <ChevronDown
               size={14}
@@ -203,6 +163,12 @@ function GapAnalysisTab() {
       </div>
 
       {/* No skills state */}
+      {jobsError && (
+        <div className="p-4 rounded-2xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700/50 text-sm text-amber-800 dark:text-amber-300">
+          {jobsError}
+        </div>
+      )}
+
       {!loading && !error && (user?.skills || []).length === 0 && (
         <div className="p-5 rounded-2xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700/50">
           <p className="text-sm font-semibold text-amber-800 dark:text-amber-300 mb-1">
@@ -219,7 +185,7 @@ function GapAnalysisTab() {
       {error && (
         <div className="flex items-center gap-2 p-4 rounded-2xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700/50 text-red-700 dark:text-red-400 text-sm">
           <AlertCircle size={16} className="flex-shrink-0" />
-          {error} — showing sample data below.
+          {error}
         </div>
       )}
 
@@ -231,13 +197,17 @@ function GapAnalysisTab() {
           {/* ── Left: ring + score breakdown ─────────── */}
           <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 border border-slate-200 dark:border-white/8 flex flex-col items-center">
             <CircularProgress
-              score={gap?.overall_readiness ?? 0}
+              score={gap?.overall_readiness ?? selectedJob?.match_score ?? 0}
               size={160}
               strokeWidth={14}
-              label={selectedJob?.title}
-              sublabel={`${matchedSkills.length} of ${matchedSkills.length + missingSkills.length} skills matched`}
+              label={selectedJob?.title || "Select a job"}
+              sublabel={
+                selectedJob?.match_score != null
+                  ? `${selectedJob.match_score}% match · ${matchedSkills.length} skills aligned`
+                  : `${matchedSkills.length} of ${matchedSkills.length + missingSkills.length} skills matched`
+              }
             />
-            <ScoreBreakdown scores={null} />
+            <ScoreBreakdown scores={gap?.component_scores || selectedJob?.component_scores} />
           </div>
 
           {/* ── Right: skill bars ────────────────────── */}
@@ -390,10 +360,16 @@ function MySkillsTab() {
 
 // ── Learning Path tab ─────────────────────────────────────────────────────────
 function LearningPathTab() {
-  const { user } = useAuth();
-  const [selectedJobId, setSelectedJobId] = useState(SAMPLE_JOBS[0]._id);
-  const selectedJob = SAMPLE_JOBS.find((j) => j._id === selectedJobId);
-  const { gap, loading } = useSkillGap(null, selectedJob);
+  const { jobs: matchedJobs, loading: jobsLoading } = useMatchedJobs(12);
+  const [selectedJobId, setSelectedJobId] = useState("");
+  const jobList = matchedJobs;
+  const selectedJob = jobList.find((j) => String(j._id) === String(selectedJobId)) || jobList[0];
+
+  useEffect(() => {
+    if (selectedJob?._id && !selectedJobId) setSelectedJobId(String(selectedJob._id));
+  }, [selectedJob, selectedJobId]);
+
+  const { gap, loading } = useSkillGap(selectedJob?._id, selectedJob);
 
   const learningPath = gap?.learning_path || [];
 
@@ -417,21 +393,27 @@ function LearningPathTab() {
           </label>
           <div className="relative">
             <select
-              value={selectedJobId}
+              value={selectedJobId || selectedJob?._id || ""}
               onChange={(e) => setSelectedJobId(e.target.value)}
+              disabled={jobsLoading || jobList.length === 0}
               className="
                 w-full px-4 py-2.5 rounded-xl text-sm appearance-none
                 bg-slate-100 dark:bg-slate-700
                 border border-slate-200 dark:border-white/10
                 text-slate-900 dark:text-slate-100
                 outline-none focus:border-blue-500 cursor-pointer
+                disabled:opacity-60
               "
             >
-              {SAMPLE_JOBS.map((j) => (
-                <option key={j._id} value={j._id}>
-                  {j.title} — {j.company}
-                </option>
-              ))}
+              {jobList.length === 0 ? (
+                <option value="">Upload CV to load matched jobs</option>
+              ) : (
+                jobList.map((j) => (
+                  <option key={j._id} value={j._id}>
+                    {j.title} — {j.company}
+                  </option>
+                ))
+              )}
             </select>
             <ChevronDown
               size={14}

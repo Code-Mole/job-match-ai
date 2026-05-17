@@ -7,6 +7,7 @@ import FormData from 'form-data'
 import User     from '../models/User.js'
 import Job      from '../models/Job.js'
 import { protect } from '../middleware/auth.js'
+import { dedupeJobs } from '../utils/dedupeJobs.js'
 import { fileURLToPath } from "url";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -168,6 +169,11 @@ router.post('/parse', protect, upload.single('file'), async (req, res, next) => 
             missingSkills: m.missing_skills,
           }
         }).filter(Boolean)
+
+        topMatches = dedupeJobs(topMatches.map((m) => ({
+          ...m,
+          externalId: m._id?.toString?.() || m.job_id,
+        })))
       }
     } catch (matchErr) {
       console.warn('Match scoring failed:', matchErr.message)

@@ -7,6 +7,7 @@ import StatsBar from '../../components/dashboard/StatsBar'
 import JobCard from '../../components/jobs/JobCard'
 import { JobCardSkeleton } from '../../components/ui/LoadingSkeleton'
 import { useDashboard }    from '../../hooks/useDashboard'
+import { dedupeJobs } from '../../utils/dedupeJobs'
 
 export default function DashboardPage() {
   const navigate  = useNavigate()
@@ -25,16 +26,13 @@ export default function DashboardPage() {
 
   const handleCvUpload = (file, parsed) => {
     setCvUploaded(true)
-    // Instantly show matched jobs from the CV parse response
     if (parsed?.top_matches?.length) {
       injectCvMatches(parsed.top_matches)
-    } else {
-      // No matches returned — re-fetch from server with new skills
-      refetch()
     }
+    refetch()
   }
 
-  const filtered = jobs.filter(j =>
+  const filtered = dedupeJobs(jobs).filter(j =>
     !search || [j.title, j.company, j.location].some(
       v => v?.toLowerCase().includes(search.toLowerCase())
     )
@@ -42,7 +40,7 @@ export default function DashboardPage() {
 
   return (
     <AppLayout onSearch={setSearch}>
-      <div className="max-w-6xl mx-auto px-6 py-6">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6">
         <StatsBar stats={stats} />
 
         <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
@@ -120,10 +118,10 @@ export default function DashboardPage() {
               <h3 className="font-display font-bold text-slate-900 dark:text-slate-100 text-sm mb-3">Quick Stats</h3>
               <div className="space-y-2">
                 {[
-                  { label: 'Jobs available',   value: stats?.totalJobs    ?? '—' },
-                  { label: 'Applied',          value: stats?.appliedCount ?? 0   },
-                  { label: 'Saved',            value: stats?.savedCount   ?? 0   },
-                  { label: 'Skills on profile',value: stats?.skillCount   ?? 0   },
+                  { label: 'Jobs available',    value: stats?.totalJobs ?? '—' },
+                  { label: 'Profile strength', value: stats?.profileStrength != null ? `${stats.profileStrength}%` : '—' },
+                  { label: 'Avg match score',  value: stats?.avgMatchScore != null ? `${stats.avgMatchScore}%` : '—' },
+                  { label: 'Skills on profile', value: stats?.skillCount ?? 0 },
                 ].map(({ label, value }) => (
                   <div key={label} className="flex justify-between text-sm">
                     <span className="text-slate-500 dark:text-slate-400">{label}</span>

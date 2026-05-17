@@ -5,12 +5,9 @@ import MessageBubble from "../../components/assistant/MessageBubble";
 import TypingIndicator from "../../components/assistant/TypingIndicator";
 import PromptChip from "../../components/assistant/PromptChip";
 import { useChat, SUGGESTED_PROMPTS } from "../../hooks/useChat";
-import { useAuth } from "../../context/AuthContext";
 
 export default function AssistantPage() {
-  const { user } = useAuth();
-  const context = { userName: user?.name, skills: user?.skills };
-  const { messages, loading, error, sendMessage, clearChat } = useChat(context);
+  const { messages, loading, error, sendMessage, clearChat } = useChat();
   const [input, setInput] = useState("");
   const bottomRef = useRef(null);
   const inputRef = useRef(null);
@@ -36,32 +33,34 @@ export default function AssistantPage() {
 
   return (
     <AppLayout>
-      <div className="flex flex-col h-full max-w-4xl mx-auto px-4 py-6">
+      <div className="flex flex-col h-full max-w-4xl mx-auto px-3 sm:px-4 py-4 sm:py-6 min-h-0">
         {/* ── Page header ──────────────────────────── */}
-        <div className="flex items-center justify-between mb-6 flex-shrink-0">
-          <div className="flex items-start gap-4">
-            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center flex-shrink-0">
-              <Sparkles size={22} className="text-white" />
+        <div className="flex flex-col gap-4 mb-6 sm:flex-row sm:items-start sm:justify-between sm:gap-4 flex-shrink-0 px-1">
+          <div className="flex items-start gap-3 sm:gap-4 min-w-0">
+            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center flex-shrink-0">
+              <Sparkles size={20} className="text-white sm:hidden" />
+              <Sparkles size={22} className="text-white hidden sm:block" />
             </div>
-            <div>
-              <h1 className="font-display font-bold text-3xl text-slate-900 dark:text-slate-50 mb-1">
+            <div className="min-w-0">
+              <h1 className="font-display font-bold text-2xl sm:text-3xl text-slate-900 dark:text-slate-50 mb-1">
                 AI Career Assistant
               </h1>
               <p className="text-slate-500 dark:text-slate-400 text-sm">
-                Ask me anything about your career, skills, or job matches.
+                Powered by ChatGPT, Grok, or Claude — configure API keys on the
+                server. Ask about any sector or career move.
               </p>
             </div>
           </div>
           <button
             onClick={clearChat}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm text-slate-500 dark:text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 border border-slate-200 dark:border-white/10 transition-all"
+            className="flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-sm text-slate-500 dark:text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 border border-slate-200 dark:border-white/10 transition-all w-full sm:w-auto shrink-0"
           >
             <Trash2 size={14} /> Clear chat
           </button>
         </div>
 
         {/* ── Chat window ──────────────────────────── */}
-        <div className="flex-1 flex flex-col bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-white/8 overflow-hidden min-h-0">
+        <div className="flex-1 flex flex-col bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-white/8 overflow-hidden min-h-[min(70vh,36rem)]">
           {/* Messages area */}
           <div className="flex-1 overflow-y-auto p-6 space-y-5">
             {messages.length === 0 && (

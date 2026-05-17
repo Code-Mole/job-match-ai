@@ -8,19 +8,18 @@ import JobDetailPage from "./pages/jobs/JobDetailPage";
 import CareersPage from "./pages/careers/CareersPage";
 import SkillsPage from "./pages/skills/SkillsPage";
 import AssistantPage from "./pages/assistant/AssistantPage";
-import SettingsPage from './pages/settings/SettingsPage'
-
-const Stub = ({ name }) => (
-  <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-900">
-    <p className="text-2xl font-display font-bold text-slate-400">
-      {name} — coming in Step 8
-    </p>
-  </div>
-);
+import SettingsPage from "./pages/settings/SettingsPage";
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth();
-  if (loading) return null;
+  if (loading) {
+    return (
+      <div className="min-h-[100dvh] flex flex-col items-center justify-center gap-3 bg-slate-50 dark:bg-slate-900 px-4">
+        <div className="w-10 h-10 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+        <p className="text-sm text-slate-500 dark:text-slate-400">Loading…</p>
+      </div>
+    );
+  }
   if (!user) return <Navigate to="/login" replace />;
   return children;
 }

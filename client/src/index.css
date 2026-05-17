@@ -9,6 +9,33 @@ html {
   transition: background-color 0.3s ease, color 0.3s ease;
 }
 
+/* Light mode: stronger contrast and slightly larger body text */
+html:not(.dark) {
+  color: #1e293b;
+}
+
+html:not(.dark) body {
+  @apply text-slate-800 text-[15px] leading-relaxed;
+}
+
+html:not(.dark) .text-xs {
+  font-size: 0.8125rem;
+  line-height: 1.25rem;
+}
+
+html:not(.dark) .text-sm {
+  font-size: 0.9375rem;
+  line-height: 1.375rem;
+}
+
+html:not(.dark) .text-slate-500 {
+  @apply text-slate-600;
+}
+
+html:not(.dark) .text-slate-400 {
+  @apply text-slate-500;
+}
+
 /* Glass card utility — used throughout the app */
 @layer components {
   .glass-card {

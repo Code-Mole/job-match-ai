@@ -33,9 +33,15 @@ export default function FilterBar({ filters, onUpdate, onReset, total }) {
     "
     >
       {/* ── Main filter row ──────────────────────────────────────── */}
-      <div className="flex flex-wrap items-center gap-3 px-6 py-4">
+      <div
+        className="
+        flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center
+        px-4 sm:px-6 py-4
+        overflow-x-auto sm:overflow-visible
+      "
+      >
         {/* Search */}
-        <div className="relative flex-1 min-w-[200px]">
+        <div className="relative flex-1 min-w-[min(100%,12rem)] sm:min-w-[200px]">
           <Search
             size={15}
             className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
@@ -66,7 +72,7 @@ export default function FilterBar({ filters, onUpdate, onReset, total }) {
         </div>
 
         {/* Location */}
-        <div className="relative">
+        <div className="relative w-full sm:w-auto shrink-0">
           <MapPin
             size={13}
             className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
@@ -91,7 +97,7 @@ export default function FilterBar({ filters, onUpdate, onReset, total }) {
         </div>
 
         {/* Job type */}
-        <div className="relative">
+        <div className="relative w-full sm:w-auto shrink-0">
           <Briefcase
             size={13}
             className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
@@ -120,6 +126,7 @@ export default function FilterBar({ filters, onUpdate, onReset, total }) {
           value={filters.level}
           onChange={(e) => onUpdate("level", e.target.value)}
           className="
+            w-full sm:w-auto min-w-0
             px-4 py-2.5 rounded-xl text-sm appearance-none
             bg-slate-100 dark:bg-slate-800
             border border-slate-200 dark:border-white/8
@@ -137,7 +144,7 @@ export default function FilterBar({ filters, onUpdate, onReset, total }) {
         <button
           onClick={() => onUpdate("remote", !filters.remote)}
           className={`
-            flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium
+            flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium w-full sm:w-auto justify-center
             border transition-all duration-200
             ${
               filters.remote
@@ -164,7 +171,7 @@ export default function FilterBar({ filters, onUpdate, onReset, total }) {
         </button>
 
         {/* Sort */}
-        <div className="flex items-center gap-2 ml-auto">
+        <div className="flex items-center gap-2 w-full sm:w-auto sm:ml-auto justify-end flex-wrap">
           <SlidersHorizontal size={14} className="text-slate-400" />
           <select
             value={filters.sort}
@@ -187,7 +194,7 @@ export default function FilterBar({ filters, onUpdate, onReset, total }) {
       </div>
 
       {/* ── Results count + active filter chips ─────────────────── */}
-      <div className="flex items-center gap-3 px-6 pb-3 flex-wrap">
+      <div className="flex items-center gap-3 px-4 sm:px-6 pb-3 flex-wrap">
         <span className="text-sm text-slate-500 dark:text-slate-400">
           <span className="font-semibold text-slate-900 dark:text-slate-100">
             {total}

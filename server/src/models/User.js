@@ -92,6 +92,30 @@ const userSchema = new mongoose.Schema(
       roles: [String],
     },
 
+    notificationPrefs: {
+      type: mongoose.Schema.Types.Mixed,
+      default: () => ({
+        jobMatches: true,
+        weeklyDigest: true,
+        skillUpdates: false,
+        appStatus: true,
+        marketing: false,
+        browser: true,
+      }),
+    },
+
+    privacyPrefs: {
+      type: mongoose.Schema.Types.Mixed,
+      default: () => ({
+        profileVisible: true,
+        showSalaryExpectation: false,
+        allowRecruiterContact: true,
+        dataAnalytics: true,
+      }),
+    },
+
+    yearsExp: { type: Number, default: 0 },
+
     role: { type: String, enum: ["user", "admin"], default: "user" },
     isActive: { type: Boolean, default: true },
     lastLogin: { type: Date, default: null },

@@ -1,9 +1,11 @@
 import express from 'express' 
 import axios from "axios"
 import Job     from '../models/Job.js'
-import { protect, adminOnly } from '../middleware/auth.js'
+import User    from '../models/User.js'
+import { protect } from '../middleware/auth.js'
 import { syncJobs } from '../services/jobsApiService.js'
-import nodemailer from 'nodemailer'
+import { dedupeJobs } from '../utils/dedupeJobs.js'
+import { sendApplicationEmail } from '../utils/email.js'
 
 const router = express.Router();
 // ── GET /api/jobs — List with filters + pagination ───────────────────────────
@@ -27,17 +29,22 @@ router.get('/', async (req, res, next) => {
     if (remote)   filter.remote   = remote === 'true'
     if (level)    filter.level    = level
 
-    // Salary range overlap filter
-    if (salaryMin) filter.salaryMax = { $gte: Number(salaryMin) }
-    if (salaryMax) filter.salaryMin = { $lte: Number(salaryMax) }
+    if (salaryMin || salaryMax) {
+      const salaryParts = []
+      if (salaryMin) salaryParts.push({ salaryMax: {  $gte: Number(salaryMin) } })
+      if (salaryMax) salaryParts.push({ salaryMin: { $lte: Number(salaryMax) } })
+      filter.$and = [...(filter.$and || []), ...salaryParts]
+    }
 
     const skip  = (Number(page) - 1) * Number(limit)
     const total = await Job.countDocuments(filter)
-    const jobs  = await Job.find(filter)
+    const rawJobs = await Job.find(filter)
       .sort(sort)
       .skip(skip)
-      .limit(Number(limit))
-      .lean() // Returns plain JS object instead of Mongoose document — faster
+      .limit(Number(limit) * 2)
+      .lean()
+
+    const jobs = dedupeJobs(rawJobs).slice(0, Number(limit))
 
     res.json({
       success: true,
@@ -52,16 +59,133 @@ router.get('/', async (req, res, next) => {
   }
 })
 
-// ── GET /api/jobs/:id — Single job ───────────────────────────────────────────
-router.get('/:id', async (req, res, next) => {
+// ── GET /api/jobs/match — AI scores merged with full job data ─────────────────
+router.get('/match', protect, async (req, res, next) => {
   try {
-    const job = await Job.findById(req.params.id).lean()
-    if (!job) return res.status(404).json({ message: 'Job not found.' })
-    res.json({ success: true, job })
+    const user    = req.user
+    const AI_URL  = process.env.AI_SERVICE_URL || 'http://localhost:8000'
+
+    if (!user.skills?.length) {
+      // No skills yet — return plain recent jobs with null scores
+      const jobs = await Job.find({ isActive: true })
+        .sort({ postedAt: -1 })
+        .limit(10)
+        .lean()
+
+      return res.json({
+        success: true,
+        matches: jobs.map(j => ({
+          job_id:      j._id,
+          title:       j.title,
+          company:     j.company,
+          location:    j.location,
+          salary:      j.salary,
+          type:        j.type,
+          remote:      j.remote,
+          level:       j.level,
+          match_score: null,
+          matched_skills: [],
+          missing_skills: j.skills || [],
+          component_scores: {},
+        })),
+      })
+    }
+
+    // Load jobs from DB
+    const jobs = await Job.find({ isActive: true }).lean().limit(100)
+
+    // Reload AI service with current jobs
+    try {
+      await axios.post(`${AI_URL}/load-jobs`, { jobs }, { timeout: 8000 })
+    } catch { /* non-fatal */ }
+
+    // Get scores
+    const { data: aiData } = await axios.post(
+      `${AI_URL}/match`,
+      { skills: user.skills, years_exp: user.yearsExp || 0, top_n: 10 },
+      { timeout: 12000 }
+    )
+
+    // Merge AI scores with full job documents
+    const matches = (aiData.matches || []).map(m => {
+      const job = jobs.find(j =>
+        j._id.toString() === m.job_id || j.externalId === m.job_id
+      )
+      if (!job) return null
+      return {
+        job_id:           job._id,
+        title:            job.title,
+        company:          job.company,
+        location:         job.location,
+        salary:           job.salary,
+        type:             job.type,
+        remote:           job.remote,
+        level:            job.level,
+        industry:         job.industry,
+        applyUrl:         job.applyUrl,
+        match_score:      m.match_score,
+        matched_skills:   m.matched_skills,
+        missing_skills:   m.missing_skills,
+        component_scores: m.component_scores,
+      }
+    }).filter(Boolean)
+
+    const uniqueMatches = dedupeJobs(
+      matches.map((m) => ({ ...m, _id: m.job_id, externalId: m.job_id })),
+    ).map((m) => ({
+      job_id: m.job_id || m._id,
+      title: m.title,
+      company: m.company,
+      location: m.location,
+      salary: m.salary,
+      type: m.type,
+      remote: m.remote,
+      level: m.level,
+      industry: m.industry,
+      applyUrl: m.applyUrl,
+      match_score: m.match_score,
+      matched_skills: m.matched_skills,
+      missing_skills: m.missing_skills,
+      component_scores: m.component_scores,
+    }))
+
+    res.json({ success: true, matches: uniqueMatches })
+
   } catch (err) {
+    if (err.code === 'ECONNREFUSED') {
+      // AI down — return jobs without scores
+      try {
+        const jobs = await Job.find({ isActive: true }).sort({ postedAt: -1 }).limit(10).lean()
+        return res.json({
+          success: true,
+          matches: jobs.map(j => ({
+            job_id: j._id, title: j.title, company: j.company,
+            location: j.location, salary: j.salary, type: j.type,
+            remote: j.remote, level: j.level, match_score: null,
+            matched_skills: [], missing_skills: j.skills || [],
+          })),
+        })
+      } catch (dbErr) { return next(dbErr) }
+    }
     next(err)
   }
 })
+
+
+// ── POST /api/jobs/sync — Fetch latest jobs from real APIs ───────────────────
+router.post('/sync', async (req, res, next) => {
+  try {
+    const force = req.query.force === 'true'
+    const category =
+      req.query.category ||
+      req.body?.category ||
+      'all'
+    const result = await syncJobs(force, String(category))
+    res.json({ success: true, ...result })
+  } catch (err) { next(err) }
+})
+
+
 
 // ── POST /api/jobs/seed — Load sample data ───────────────────────────────────
 // This lets you quickly populate the DB for demo/testing
@@ -226,95 +350,14 @@ router.post('/seed', async (req, res, next) => {
   }
 })
 
-// ── GET /api/jobs/match — AI scores merged with full job data ─────────────────
-router.get('/match', protect, async (req, res, next) => {
+
+// ── GET /api/jobs/:id — Single job ───────────────────────────────────────────
+router.get('/:id', async (req, res, next) => {
   try {
-    const user    = req.user
-    const AI_URL  = process.env.AI_SERVICE_URL || 'http://localhost:8000'
-
-    if (!user.skills?.length) {
-      // No skills yet — return plain recent jobs with null scores
-      const jobs = await Job.find({ isActive: true })
-        .sort({ postedAt: -1 })
-        .limit(10)
-        .lean()
-
-      return res.json({
-        success: true,
-        matches: jobs.map(j => ({
-          job_id:      j._id,
-          title:       j.title,
-          company:     j.company,
-          location:    j.location,
-          salary:      j.salary,
-          type:        j.type,
-          remote:      j.remote,
-          level:       j.level,
-          match_score: null,
-          matched_skills: [],
-          missing_skills: j.skills || [],
-          component_scores: {},
-        })),
-      })
-    }
-
-    // Load jobs from DB
-    const jobs = await Job.find({ isActive: true }).lean().limit(100)
-
-    // Reload AI service with current jobs
-    try {
-      await axios.post(`${AI_URL}/load-jobs`, { jobs }, { timeout: 8000 })
-    } catch { /* non-fatal */ }
-
-    // Get scores
-    const { data: aiData } = await axios.post(
-      `${AI_URL}/match`,
-      { skills: user.skills, years_exp: user.yearsExp || 0, top_n: 10 },
-      { timeout: 12000 }
-    )
-
-    // Merge AI scores with full job documents
-    const matches = (aiData.matches || []).map(m => {
-      const job = jobs.find(j =>
-        j._id.toString() === m.job_id || j.externalId === m.job_id
-      )
-      if (!job) return null
-      return {
-        job_id:           job._id,
-        title:            job.title,
-        company:          job.company,
-        location:         job.location,
-        salary:           job.salary,
-        type:             job.type,
-        remote:           job.remote,
-        level:            job.level,
-        industry:         job.industry,
-        applyUrl:         job.applyUrl,
-        match_score:      m.match_score,
-        matched_skills:   m.matched_skills,
-        missing_skills:   m.missing_skills,
-        component_scores: m.component_scores,
-      }
-    }).filter(Boolean)
-
-    res.json({ success: true, matches })
-
+    const job = await Job.findById(req.params.id).lean()
+    if (!job) return res.status(404).json({ message: 'Job not found.' })
+    res.json({ success: true, job })
   } catch (err) {
-    if (err.code === 'ECONNREFUSED') {
-      // AI down — return jobs without scores
-      try {
-        const jobs = await Job.find({ isActive: true }).sort({ postedAt: -1 }).limit(10).lean()
-        return res.json({
-          success: true,
-          matches: jobs.map(j => ({
-            job_id: j._id, title: j.title, company: j.company,
-            location: j.location, salary: j.salary, type: j.type,
-            remote: j.remote, level: j.level, match_score: null,
-            matched_skills: [], missing_skills: j.skills || [],
-          })),
-        })
-      } catch (dbErr) { return next(dbErr) }
-    }
     next(err)
   }
 })
@@ -322,7 +365,7 @@ router.get('/match', protect, async (req, res, next) => {
 // ── POST /api/jobs/:id/save ───────────────────────────────────────────────────
 router.post('/:id/save', protect, async (req, res, next) => {
   try {
-    const user = await require('../models/User').findById(req.user._id)
+    const user = await User.findById(req.user._id)
     const jobId = req.params.id
     const idx   = user.savedJobs.indexOf(jobId)
 
@@ -336,32 +379,6 @@ router.post('/:id/save', protect, async (req, res, next) => {
     res.json({ success: true, saved: idx === -1 })
   } catch (err) { next(err) }
 })
-
-// ── POST /api/jobs/:id/apply ──────────────────────────────────────────────────
-router.post('/:id/apply', protect, async (req, res, next) => {
-  try {
-    const user  = await require('../models/User').findById(req.user._id)
-    const jobId = req.params.id
-    const already = user.appliedJobs.find(a => a.job.toString() === jobId)
-
-    if (!already) {
-      user.appliedJobs.push({ job: jobId })
-      await user.save({ validateBeforeSave: false })
-    }
-
-    res.json({ success: true, message: 'Application recorded.' })
-  } catch (err) { next(err) }
-})
-
-// ── POST /api/jobs/sync — Fetch latest jobs from real APIs ───────────────────
-router.post('/sync', async (req, res, next) => {
-  try {
-    const force  = req.query.force === 'true'
-    const result = await syncJobs(force)
-    res.json({ success: true, ...result })
-  } catch (err) { next(err) }
-})
-
 
 // ── POST /api/jobs/:id/apply ──────────────────────────────────────────────────
 router.post('/:id/apply', protect, async (req, res, next) => {
@@ -391,38 +408,5 @@ router.post('/:id/apply', protect, async (req, res, next) => {
 
   } catch (err) { next(err) }
 })
-
-// ── Email confirmation helper ─────────────────────────────────────────────────
-async function sendApplicationEmail(user, job) {
-  // Only send if SMTP is configured
-  if (!process.env.SMTP_HOST || !process.env.SMTP_USER) return
-
-  const transporter = nodemailer.createTransport({
-    host:   process.env.SMTP_HOST,
-    port:   parseInt(process.env.SMTP_PORT || '587'),
-    secure: false,
-    auth:   { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
-  })
-
-  await transporter.sendMail({
-    from:    `"JobMatch AI" <${process.env.SMTP_USER}>`,
-    to:      user.email,
-    subject: `Application recorded — ${job.title} at ${job.company}`,
-    html: `
-      <div style="font-family:sans-serif;max-width:560px;margin:0 auto">
-        <h2 style="color:#2563EB">Application recorded ✓</h2>
-        <p>Hi ${user.name?.split(' ')[0] || 'there'},</p>
-        <p>We've recorded your application for:</p>
-        <div style="background:#f8fafc;border-left:4px solid #2563EB;padding:16px;border-radius:4px;margin:16px 0">
-          <strong>${job.title}</strong><br/>
-          ${job.company} · ${job.location}<br/>
-          ${job.salary || ''}
-        </div>
-        ${job.applyUrl ? `<p><a href="${job.applyUrl}" style="background:#2563EB;color:#fff;padding:10px 20px;border-radius:8px;text-decoration:none;display:inline-block">Complete your application →</a></p>` : ''}
-        <p style="color:#94a3b8;font-size:13px">Track your applications on the JobMatch AI dashboard.</p>
-      </div>
-    `,
-  })
-}
 
 export default router

@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import axios from 'axios'
 import { useToast } from '../components/ui/Toast'
+import { dedupeJobs } from '../utils/dedupeJobs'
 
 export function useDashboard() {
   const toast = useToast()
@@ -52,7 +53,7 @@ export function useDashboard() {
         matched = (data.jobs || []).map(j => ({ ...j, matchScore: null }))
       }
 
-      setJobs(matched)
+      setJobs(dedupeJobs(matched))
 
       // ── Fetch stats ───────────────────────────────────────────────────────
       try {
@@ -76,7 +77,7 @@ export function useDashboard() {
   const injectCvMatches = useCallback((topMatches) => {
     if (!topMatches?.length) return
     // topMatches already has matchScore etc. merged — use directly
-    setJobs(topMatches.sort((a, b) => (b.matchScore ?? 0) - (a.matchScore ?? 0)))
+    setJobs(dedupeJobs(topMatches).sort((a, b) => (b.matchScore ?? 0) - (a.matchScore ?? 0)))
   }, [])
 
   useEffect(() => {

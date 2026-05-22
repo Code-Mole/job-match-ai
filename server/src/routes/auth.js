@@ -295,8 +295,15 @@ router.get('/stats', protect, async (req, res, next) => {
 
           const { data: aiData } = await axios.post(
             `${AI_URL}/match`,
-            { skills: user.skills, years_exp: user.yearsExp || 0, top_n: 10 },
-            { timeout: 12000 },
+            {
+              skills: user.skills,
+              years_exp: user.yearsExp || 0,
+              cv_text: user.cvText || '',
+              strengths: user.skillStrengths || {},
+              cv_roles: user.cvRoles || [],
+              top_n: 15,
+            },
+            { timeout: 15000 },
           )
           const scores = (aiData.matches || [])
             .map((m) => m.match_score)

@@ -13,13 +13,17 @@ All scores are 0–100 integers.
 import re
 import math
 import logging
-from typing import Union,Optional, List, Dict, Any
+from typing import Union, Optional, List, Dict, Any
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 import numpy as np
 
 from .skill_ontology import normalize_skills_list, normalize_skill
 from .skill_domains import classify_user_domains, classify_job_domain, domain_alignment_score
+from .job_skill_extractor import extract_skills_from_job
+from .cv_skill_extractor import extract_roles_from_cv
+
+MIN_WORKABLE_FIT = 0.38  # Below this — unlikely the user can perform the role well
 
 logger = logging.getLogger(__name__)
 
@@ -126,36 +130,73 @@ class JobMatcher:
         ]
         return " ".join(p for p in parts if p)
 
-    def _compute_skill_overlap(self, user_skills: list, job_skills: list) -> float:
+    def _compute_skill_overlap(
+        self,
+        user_skills: list,
+        job_skills: list,
+        strengths: Optional[dict] = None,
+    ) -> float:
         """
-        Jaccard-style skill overlap score.
-        Returns 0.0–1.0 based on how many required job skills the user has.
+        Weighted overlap — skills the user emphasizes on their CV count more.
         """
         if not job_skills:
-            return 0.5  # No requirements = neutral score
+            return 0.45
 
-        # Normalize both skill lists
         user_norm = set(normalize_skills_list(user_skills))
-        job_norm  = set(normalize_skills_list(job_skills))
+        job_norm = set(normalize_skills_list(job_skills))
 
         if not user_norm:
             return 0.0
 
-        # What fraction of job-required skills does the user have?
         matched = user_norm.intersection(job_norm)
-        recall  = len(matched) / len(job_norm)  # Coverage of job requirements
+        if not matched:
+            # Partial token overlap for open skills (e.g. "Sales Executive" vs "Sales")
+            partial = 0.0
+            for js in job_norm:
+                for us in user_norm:
+                    if js.lower() in us.lower() or us.lower() in js.lower():
+                        partial = max(partial, 0.35)
+            return partial
 
-        # Also check the reverse — user having extra skills is a bonus
-        precision = len(matched) / len(user_norm) if user_norm else 0
+        weighted_hits = 0.0
+        for skill in matched:
+            w = 1.0
+            if strengths:
+                for k, v in strengths.items():
+                    if k.lower() == skill.lower() or skill.lower() in k.lower():
+                        w = max(w, float(v))
+                        break
+            weighted_hits += w
 
-        # F1-style harmonic mean: balances both directions
+        recall = weighted_hits / len(job_norm)
+        precision = weighted_hits / len(user_norm)
         if recall + precision == 0:
             return 0.0
         f1 = 2 * (precision * recall) / (precision + recall)
+        return min(0.7 * recall + 0.3 * f1, 1.0)
 
-        # Weight toward recall (covering job requirements is more important)
-        weighted = 0.7 * recall + 0.3 * f1
-        return min(weighted, 1.0)
+    def _compute_role_fit(self, cv_roles: list, job: dict) -> float:
+        """How well past job titles align with this posting."""
+        if not cv_roles:
+            return 0.5
+
+        title = (job.get("title") or "").lower()
+        title_tokens = set(re.findall(r"[a-z]{3,}", title))
+        if not title_tokens:
+            return 0.5
+
+        best = 0.0
+        for role in cv_roles:
+            role_lower = role.lower()
+            role_tokens = set(re.findall(r"[a-z]{3,}", role_lower))
+            if not role_tokens:
+                continue
+            overlap = len(title_tokens & role_tokens) / max(len(title_tokens), 1)
+            if role_lower in title or title in role_lower:
+                overlap = max(overlap, 0.85)
+            best = max(best, overlap)
+
+        return min(best, 1.0)
 
     def _compute_experience_fit(self, user_years: int, job_years_required: int) -> float:
         """
@@ -209,12 +250,42 @@ class JobMatcher:
 
         return min(0.75 + remote_bonus + industry_bonus, 1.0)
 
+    def _apply_dynamic_scores(self, results: list) -> list:
+        """
+        Spread match scores so best fits are clearly higher (not all the same %).
+        Uses raw composite ranking mapped to 48–97 for workable jobs.
+        """
+        if not results:
+            return results
+
+        workable = [r for r in results if r.get("workable", False)]
+        if not workable:
+            workable = sorted(results, key=lambda x: x["raw_score"], reverse=True)[:8]
+
+        workable.sort(key=lambda x: x["raw_score"], reverse=True)
+        n = len(workable)
+        for i, r in enumerate(workable):
+            if n == 1:
+                spread = 0.92
+            else:
+                spread = 1.0 - (i / (n - 1)) * 0.42
+            r["match_score"] = min(97, int(55 + spread * 42))
+
+        for r in results:
+            if r not in workable:
+                r["match_score"] = min(44, int(r["raw_score"] * 48))
+
+        results.sort(key=lambda x: x["match_score"], reverse=True)
+        return results
+
     def match(
         self,
         user_skills: list,
         cv_text:     str  = "",
         years_exp:   int  = 0,
         top_n:       int  = 20,
+        strengths:   dict | None = None,
+        cv_roles:    Optional[list] = None,
     ) -> list:
         """
         Main matching function. Returns a list of jobs sorted by match score.
@@ -235,79 +306,95 @@ class JobMatcher:
         if not user_skills and not cv_text:
             logger.warning("No user skills or CV text provided — returning neutral scores.")
 
+        strengths = strengths or {}
+        roles = cv_roles if cv_roles is not None else (
+            extract_roles_from_cv(cv_text) if cv_text else []
+        )
         user_domains = classify_user_domains(user_skills)
 
-        # ── Step 1: TF-IDF cosine similarity ─────────────────────────────────
-        user_doc     = self._build_user_document(user_skills, cv_text)
-        user_vector  = self.vectorizer.transform([preprocess_text(user_doc)])
+        user_doc = self._build_user_document(user_skills, cv_text)
+        user_vector = self.vectorizer.transform([preprocess_text(user_doc)])
         tfidf_scores = cosine_similarity(user_vector, self.job_matrix).flatten()
 
-        # ── Step 2: Compute composite score for each job ──────────────────────
         results = []
 
         for idx, job in enumerate(self.jobs_data):
-            tfidf_sim   = float(tfidf_scores[idx])  # 0.0–1.0
+            tfidf_sim = float(tfidf_scores[idx])
+            job_skills = extract_skills_from_job(job)
 
-            # Component scores
-            skill_score   = self._compute_skill_overlap(user_skills, job.get("skills", []))
-            exp_score     = self._compute_experience_fit(years_exp, job.get("yearsExp", 0))
-            growth_score  = self._compute_growth_alignment(job)
+            skill_score = self._compute_skill_overlap(
+                user_skills, job_skills, strengths
+            )
+            exp_score = self._compute_experience_fit(
+                years_exp, job.get("yearsExp", 0)
+            )
+            role_score = self._compute_role_fit(roles, job)
+            growth_score = self._compute_growth_alignment(job)
             culture_score = self._compute_cultural_fit(user_skills, job)
 
-            # Domain alignment — tech users rank tech jobs higher, etc.
-            job_domains = classify_job_domain(job)
+            job_domains = classify_job_domain({**job, "skills": job_skills})
             domain_score = domain_alignment_score(user_domains, job_domains)
 
-            # Blend TF-IDF with skill overlap for the "skill match" component
-            blended_skill = 0.6 * skill_score + 0.4 * tfidf_sim
-            blended_skill = min(1.0, blended_skill * (0.35 + 0.65 * domain_score))
+            blended_skill = (
+                0.45 * skill_score + 0.35 * tfidf_sim + 0.20 * role_score
+            )
+            blended_skill = min(1.0, blended_skill * (0.25 + 0.75 * domain_score))
 
-            # Dynamic weights: stronger skill overlap → more weight on skills
-            skill_weight = 0.32 + 0.18 * blended_skill
-            exp_weight = 0.28
-            growth_weight = 0.22
-            culture_weight = 0.18
-            total_w = skill_weight + exp_weight + growth_weight + culture_weight
-            skill_weight /= total_w
-            exp_weight /= total_w
-            growth_weight /= total_w
-            culture_weight /= total_w
-
+            skill_weight = 0.38 + 0.22 * blended_skill
+            exp_weight = 0.22 + 0.08 * exp_score
+            role_weight = 0.15
+            growth_weight = 0.12
+            culture_weight = 0.13
+            total_w = (
+                skill_weight + exp_weight + role_weight
+                + growth_weight + culture_weight
+            )
             composite = (
-                skill_weight * blended_skill +
-                exp_weight * exp_score +
-                growth_weight * growth_score +
-                culture_weight * culture_score
+                skill_weight * blended_skill
+                + exp_weight * exp_score
+                + role_weight * role_score
+                + growth_weight * growth_score
+                + culture_weight * culture_score
+            ) / total_w
+
+            workable = (
+                composite >= MIN_WORKABLE_FIT
+                and domain_score >= 0.22
+                and (
+                    skill_score >= 0.12
+                    or tfidf_sim >= 0.06
+                    or role_score >= 0.35
+                )
             )
 
-            match_score = min(int(round(composite * 100)), 99)
-            if domain_score < 0.25 and blended_skill < 0.2:
-                match_score = min(match_score, 35)
-
-            # Which skills matched / are missing?
             user_norm = set(normalize_skills_list(user_skills))
-            job_norm  = set(normalize_skills_list(job.get("skills", [])))
+            job_norm = set(normalize_skills_list(job_skills))
             matched_skills = sorted(user_norm.intersection(job_norm))
             missing_skills = sorted(job_norm - user_norm)
 
             results.append({
-                "job":           job,
-                "match_score":   match_score,
+                "job": job,
+                "raw_score": composite,
+                "workable": workable,
+                "match_score": 0,
                 "component_scores": {
-                    "skill_match":   int(round(blended_skill * 100)),
+                    "skill_match": int(round(blended_skill * 100)),
                     "experience_fit": int(round(exp_score * 100)),
-                    "growth_align":  int(round(growth_score * 100)),
-                    "cultural_fit":  int(round(culture_score * 100)),
-                    "domain_align":  int(round(domain_score * 100)),
-                    "tfidf_sim":     round(tfidf_sim, 4),
+                    "role_fit": int(round(role_score * 100)),
+                    "growth_align": int(round(growth_score * 100)),
+                    "cultural_fit": int(round(culture_score * 100)),
+                    "domain_align": int(round(domain_score * 100)),
+                    "tfidf_sim": round(tfidf_sim, 4),
                 },
                 "matched_skills": matched_skills,
                 "missing_skills": missing_skills,
             })
 
-        # Sort by match score descending
-        results.sort(key=lambda x: x["match_score"], reverse=True)
-        return results[:top_n]
+        results = self._apply_dynamic_scores(results)
+        workable_only = [r for r in results if r.get("workable")]
+        pool = workable_only if workable_only else results
+        pool.sort(key=lambda x: x["match_score"], reverse=True)
+        return pool[:top_n]
 
 
 # ── Singleton instance — initialized once at startup ─────────────────────────

@@ -43,6 +43,9 @@ const userSchema = new mongoose.Schema(
 
     // Skills extracted by AI from CV + manually added
     skills: [{ type: String, trim: true }],
+    cvText: { type: String, default: "", maxlength: 12000 },
+    cvRoles: [{ type: String, trim: true }],
+    skillStrengths: { type: mongoose.Schema.Types.Mixed, default: () => ({}) },
 
     // Work experience — used for experience_fit scoring
     experience: [

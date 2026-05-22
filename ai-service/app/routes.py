@@ -9,6 +9,7 @@ from flask import Blueprint, request, jsonify
 
 from .matcher    import get_matcher
 from .cv_parser  import parse_cv, extract_skills_from_text
+from .cv_skill_extractor import extract_skills_from_cv_text
 from .skill_gap  import analyse_skill_gap
 from .skill_ontology import normalize_skills_list
 
@@ -130,9 +131,13 @@ def match_jobs():
     cv_text     = data.get("cv_text", "")
     years_exp   = int(data.get("years_exp", 0))
     top_n       = int(data.get("top_n", 20))
+    strengths   = data.get("strengths") or {}
+    cv_roles    = data.get("cv_roles") or []
 
-    # Normalize incoming skills
+    # Normalize incoming skills; mine from CV text if profile skills are empty
     user_skills = normalize_skills_list(user_skills)
+    if cv_text and not user_skills:
+        user_skills = extract_skills_from_cv_text(cv_text)
 
     if not user_skills and not cv_text:
         return jsonify({"error": "Provide at least one of: skills, cv_text"}), 400
@@ -143,6 +148,8 @@ def match_jobs():
             cv_text=cv_text,
             years_exp=years_exp,
             top_n=top_n,
+            strengths=strengths,
+            cv_roles=cv_roles,
         )
 
         # Clean up response — remove raw job object, add id field
@@ -213,12 +220,16 @@ def parse_cv_endpoint():
     if not result["success"]:
         return jsonify({"error": result.get("error", "Parsing failed")}), 500
 
+    raw = result.get("raw_text", "")
     return jsonify({
         "success":          True,
         "skills":           result["skills"],
+        "roles":            result.get("roles", []),
+        "strengths":        result.get("strengths", {}),
         "years_experience": result["years_experience"],
         "word_count":       result["word_count"],
-        "raw_text_preview": result["raw_text"][:300] + "..." if len(result["raw_text"]) > 300 else result["raw_text"],
+        "raw_text":         raw[:12000],
+        "raw_text_preview": raw[:300] + "..." if len(raw) > 300 else raw,
     })
 
 

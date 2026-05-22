@@ -28,7 +28,7 @@ try:
 except ImportError:
     DOCX_AVAILABLE = False
 
-from .skill_ontology import normalize_skill, SKILL_ALIASES
+from .cv_skill_extractor import extract_cv_profile, extract_skills_from_cv_text
 
 logger = logging.getLogger(__name__)
 
@@ -109,34 +109,8 @@ def extract_text_from_file(file_path: str) -> str:
 
 
 def extract_skills_from_text(text: str) -> list:
-    """
-    Scan raw CV text for known skills using the ontology.
-
-    Strategy:
-    1. Build a flat list of all known aliases (including canonical names)
-    2. Search for each alias in the text (word-boundary aware)
-    3. Map found aliases back to canonical names
-    4. Deduplicate
-    """
-    text_lower = text.lower()
-    found_canonicals = set()
-
-    # We search for ALL aliases, not just canonical names
-    from .skill_ontology import _REVERSE_MAP
-
-    for alias, canonical in _REVERSE_MAP.items():
-        # Use word boundaries to avoid "go" matching "google"
-        # but allow special chars in skills like "C++", "C#"
-        pattern = r'(?<![a-zA-Z0-9])' + re.escape(alias) + r'(?![a-zA-Z0-9])'
-        try:
-            if re.search(pattern, text_lower):
-                found_canonicals.add(canonical)
-        except re.error:
-            # Some special aliases may have regex chars — skip them safely
-            if alias in text_lower:
-                found_canonicals.add(canonical)
-
-    return sorted(found_canonicals)
+    """Open CV-based skill extraction (all industries, not tech-only)."""
+    return extract_skills_from_cv_text(text)
 
 
 def extract_years_of_experience(text: str) -> int:
@@ -174,16 +148,19 @@ def parse_cv(file_path: str) -> dict:
     """
     try:
         raw_text = extract_text_from_file(file_path)
-        skills = extract_skills_from_text(raw_text)
+        profile = extract_cv_profile(raw_text)
+        skills = profile["skills"]
         years_exp = extract_years_of_experience(raw_text)
 
         return {
-            "success":         True,
-            "raw_text":        raw_text,
-            "skills":          skills,
+            "success":          True,
+            "raw_text":         raw_text,
+            "skills":           skills,
+            "roles":            profile.get("roles", []),
+            "strengths":        profile.get("strengths", {}),
             "years_experience": years_exp,
-            "word_count":      len(raw_text.split()),
-            "char_count":      len(raw_text),
+            "word_count":       len(raw_text.split()),
+            "char_count":       len(raw_text),
         }
 
     except Exception as e:

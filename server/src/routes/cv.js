@@ -70,6 +70,10 @@ router.post('/parse', protect, upload.single('file'), async (req, res, next) => 
     let wordCount    = 0
     let aiAvailable  = false
 
+          let roles = [];
+          let strengths = {};
+          let cvText = "";
+
     // ── Step 1: Parse CV with Flask ───────────────────────────────────────────
     try {
       const form = new FormData()
@@ -83,10 +87,15 @@ router.post('/parse', protect, upload.single('file'), async (req, res, next) => 
         timeout: 25000,
       })
 
+
+
       if (parsed.success) {
         skills      = parsed.skills            || []
         yearsExp    = parsed.years_experience  || 0
         wordCount   = parsed.word_count        || 0
+        roles       = parsed.roles             || []
+        strengths   = parsed.strengths         || {}
+        cvText      = (parsed.raw_text || '').slice(0, 12000)
         aiAvailable = true
       }
     } catch (flaskErr) {
@@ -100,11 +109,14 @@ router.post('/parse', protect, upload.single('file'), async (req, res, next) => 
       req.user._id,
       {
         $set: {
-          skills:       skills,
-          cvParsed:     true,
-          cvUploadedAt: new Date(),
-          cvPath:       req.file.originalname,
-          yearsExp:     yearsExp,
+          skills:           skills,
+          cvParsed:         true,
+          cvUploadedAt:     new Date(),
+          cvPath:           req.file.originalname,
+          yearsExp:         yearsExp,
+          cvText:           cvText,
+          cvRoles:          roles,
+          skillStrengths:   strengths,
         }
       },
       { new: true, runValidators: false }
@@ -134,7 +146,14 @@ router.post('/parse', protect, upload.single('file'), async (req, res, next) => 
         // Get match scores
         const matchRes = await axios.post(
           `${AI_URL}/match`,
-          { skills, years_exp: yearsExp, cv_text: '', top_n: 10 },
+          {
+            skills,
+            years_exp: yearsExp,
+            cv_text: cvText,
+            strengths,
+            cv_roles: roles,
+            top_n: 15,
+          },
           { timeout: 15000 }
         )
 
@@ -209,6 +228,11 @@ function extractSkillsFallback(filePath, originalName) {
     'Machine Learning','Deep Learning','PyTorch','TensorFlow','NLP',
     'scikit-learn','Pandas','NumPy','GraphQL','REST APIs','Git',
     'Figma','Agile','Testing','Jest','Pytest','System Design',
+    'Nursing','Patient Care','Healthcare','Teaching','Excel','Accounting',
+    'Bookkeeping','Sales','Marketing','Customer Service','Administration',
+    'Human Resources','Project Management','Driving','Warehouse','Logistics',
+    'Construction','Electrician','Plumber','Hospitality','Chef',
+    'Communication','Leadership','Teamwork','Problem Solving',
   ]
   try {
     const ext  = path.extname(originalName).toLowerCase()

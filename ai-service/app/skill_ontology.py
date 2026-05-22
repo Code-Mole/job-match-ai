@@ -75,6 +75,31 @@ SKILL_ALIASES = {
     "Testing":          ["testing", "jest", "pytest", "unit testing", "e2e", "cypress", "selenium"],
     "Figma":            ["figma", "sketch", "adobe xd"],
     "System Design":    ["system design", "distributed systems", "microservices", "architecture"],
+
+    # ── Healthcare, business, trades (open matching — not tech-only) ───────────
+    "Nursing":            ["registered nurse", "rn", "lpn", "nursing", "patient care"],
+    "Patient Care":       ["patient care", "bedside care", "clinical care"],
+    "Healthcare":         ["healthcare", "health care", "medical assistant"],
+    "Teaching":           ["teaching", "teacher", "classroom", "lecturer"],
+    "Excel":              ["excel", "spreadsheets", "pivot tables"],
+    "Accounting":         ["accounting", "bookkeeping", "accounts payable"],
+    "Sales":              ["sales", "business development", "b2b", "b2c"],
+    "Marketing":          ["marketing", "digital marketing", "seo"],
+    "Customer Service":   ["customer service", "call centre", "call center"],
+    "Administration":     ["administration", "office admin", "personal assistant"],
+    "Human Resources":    ["human resources", "hr", "recruitment"],
+    "Project Management": ["project management", "pmp", "prince2"],
+    "Driving":            ["driving", "delivery driver", "hgv", "cdl"],
+    "Warehouse":          ["warehouse", "pick and pack", "stock control"],
+    "Logistics":          ["logistics", "supply chain"],
+    "Construction":       ["construction", "site supervisor", "cscs"],
+    "Electrician":        ["electrician", "electrical"],
+    "Plumber":            ["plumber", "plumbing"],
+    "Hospitality":        ["hospitality", "hotel", "restaurant"],
+    "Chef":               ["chef", "sous chef", "culinary"],
+    "Communication":      ["communication", "verbal communication"],
+    "Leadership":         ["leadership", "team lead", "supervisor"],
+    "Teamwork":           ["teamwork", "team player", "collaboration"],
 }
 
 # Build a reverse lookup: alias → canonical name

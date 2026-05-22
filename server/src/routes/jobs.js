@@ -65,8 +65,8 @@ router.get('/match', protect, async (req, res, next) => {
     const user    = req.user
     const AI_URL  = process.env.AI_SERVICE_URL || 'http://localhost:8000'
 
-    if (!user.skills?.length) {
-      // No skills yet — return plain recent jobs with null scores
+    if (!user.skills?.length && !user.cvText) {
+      // No CV/skills yet — return plain recent jobs with null scores
       const jobs = await Job.find({ isActive: true })
         .sort({ postedAt: -1 })
         .limit(10)
@@ -99,11 +99,18 @@ router.get('/match', protect, async (req, res, next) => {
       await axios.post(`${AI_URL}/load-jobs`, { jobs }, { timeout: 8000 })
     } catch { /* non-fatal */ }
 
-    // Get scores
+    // Get scores — uses full CV text + strength weights for best-fit matching
     const { data: aiData } = await axios.post(
       `${AI_URL}/match`,
-      { skills: user.skills, years_exp: user.yearsExp || 0, top_n: 10 },
-      { timeout: 12000 }
+      {
+        skills: user.skills,
+        years_exp: user.yearsExp || 0,
+        cv_text: user.cvText || '',
+        strengths: user.skillStrengths || {},
+        cv_roles: user.cvRoles || [],
+        top_n: 25,
+      },
+      { timeout: 15000 }
     )
 
     // Merge AI scores with full job documents

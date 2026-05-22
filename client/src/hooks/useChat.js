@@ -137,7 +137,7 @@ export function useChat() {
       }
 
       const finalContent = fullText.trim()
-        || 'I could not generate a reply. Please verify your AI API key in server/.env (OPENAI_API_KEY, XAI_API_KEY, or ANTHROPIC_API_KEY) and try again.'
+        || 'I could not generate a reply. Please verify your AI API keys in server/.env (OPENAI_API_KEY, XAI_API_KEY, or GROQCLOUD_API_KEY) and try again.'
 
       setMessages(prev =>
         prev.map(m => m.id === assistantId
@@ -152,7 +152,7 @@ export function useChat() {
       const msg = err.message || ''
       const fallback = msg.includes('API key') || msg.includes('credit') || msg.includes('CHAT_PROVIDER') || msg.includes('billing')
         ? msg
-        : msg || 'I encountered an error. Please check that the server is running and set OPENAI_API_KEY or XAI_API_KEY with CHAT_PROVIDER in server/.env.'
+        : msg || 'I encountered an error. Please check that the server is running and set GROQCLOUD_API_KEY (or OPENAI_API_KEY) in server/.env.'
 
       setMessages(prev =>
         prev.map(m => m.id === assistantId

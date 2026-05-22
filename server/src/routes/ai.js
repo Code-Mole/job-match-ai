@@ -30,18 +30,99 @@ GUIDELINES:
 - End with a specific follow-up question or next action`;
 }
 
-function resolveChatProvider() {
+function getGroqCloudApiKey() {
+  return process.env.GROQCLOUD_API_KEY || process.env.GROQ_API_KEY || null;
+}
+
+function hasAnyChatProvider() {
+  return Boolean(
+    process.env.OPENAI_API_KEY ||
+      process.env.XAI_API_KEY ||
+      getGroqCloudApiKey() ||
+      (process.env.ANTHROPIC_API_KEY &&
+        process.env.CHAT_PROVIDER?.toLowerCase() === "anthropic"),
+  );
+}
+
+/** Ordered providers to try; Groq Cloud is appended as fallback when configured. */
+function buildChatProviderChain() {
   const explicit = process.env.CHAT_PROVIDER?.toLowerCase();
-  if (explicit === "openai" || explicit === "grok" || explicit === "anthropic") {
-    return explicit;
+  const groqKey = getGroqCloudApiKey();
+  const chain = [];
+
+  const add = (p) => {
+    if (!chain.includes(p)) chain.push(p);
+  };
+
+  if (explicit === "groq" || explicit === "groqcloud") {
+    if (groqKey) add("groq");
+    return chain;
   }
-  // Prefer OpenAI (ChatGPT) and Grok; Anthropic only when explicitly configured
-  if (process.env.OPENAI_API_KEY) return "openai";
-  if (process.env.XAI_API_KEY) return "grok";
-  if (process.env.ANTHROPIC_API_KEY && process.env.CHAT_PROVIDER === "anthropic") {
-    return "anthropic";
+  if (explicit === "openai" && process.env.OPENAI_API_KEY) add("openai");
+  else if (explicit === "grok" && process.env.XAI_API_KEY) add("grok");
+  else if (explicit === "anthropic" && process.env.ANTHROPIC_API_KEY) {
+    add("anthropic");
+    return chain;
+  } else if (!explicit) {
+    if (process.env.OPENAI_API_KEY) add("openai");
+    if (process.env.XAI_API_KEY) add("grok");
   }
-  return null;
+
+  if (groqKey) add("groq");
+
+  return chain;
+}
+
+function getProviderConfig(provider) {
+  switch (provider) {
+    case "openai":
+      if (!process.env.OPENAI_API_KEY) return null;
+      return {
+        kind: "openai-compatible",
+        label: "OpenAI",
+        baseUrl: process.env.OPENAI_BASE_URL || "https://api.openai.com/v1",
+        apiKey: process.env.OPENAI_API_KEY,
+        model: process.env.OPENAI_CHAT_MODEL || "gpt-4o-mini",
+      };
+    case "grok":
+      if (!process.env.XAI_API_KEY) return null;
+      return {
+        kind: "openai-compatible",
+        label: "Grok",
+        baseUrl: process.env.XAI_BASE_URL || "https://api.x.ai/v1",
+        apiKey: process.env.XAI_API_KEY,
+        model: process.env.XAI_CHAT_MODEL || "grok-2-latest",
+      };
+    case "groq": {
+      const apiKey = getGroqCloudApiKey();
+      if (!apiKey) return null;
+      return {
+        kind: "openai-compatible",
+        label: "Groq Cloud",
+        baseUrl:
+          process.env.GROQCLOUD_BASE_URL ||
+          process.env.GROQ_BASE_URL ||
+          "https://api.groq.com/openai/v1",
+        apiKey,
+        model:
+          process.env.GROQCLOUD_CHAT_MODEL ||
+          process.env.GROQ_CHAT_MODEL ||
+          "llama-3.3-70b-versatile",
+      };
+    }
+    case "anthropic":
+      if (!process.env.ANTHROPIC_API_KEY) return null;
+      return { kind: "anthropic", label: "Anthropic" };
+    default:
+      return null;
+  }
+}
+
+function isBillingOrQuotaError(err) {
+  const raw = (err?.message || String(err)).toLowerCase();
+  return /credit balance|billing|quota|insufficient|exceeded|payment required|no credits|rate limit|429|402/.test(
+    raw,
+  );
 }
 
 function parseProviderError(err, provider) {
@@ -51,7 +132,10 @@ function parseProviderError(err, provider) {
     const msg = parsed?.error?.message || parsed?.message;
     if (msg) {
       if (/credit balance|billing|quota|insufficient/i.test(msg)) {
-        return `Your ${provider} account has no credits. Add OPENAI_API_KEY (ChatGPT) or XAI_API_KEY (Grok) in server/.env and set CHAT_PROVIDER=openai or CHAT_PROVIDER=grok.`;
+        if (getGroqCloudApiKey()) {
+          return `Your ${provider} account has no credits. Groq Cloud fallback was attempted — check GROQCLOUD_API_KEY in server/.env.`;
+        }
+        return `Your ${provider} account has no credits. Add GROQCLOUD_API_KEY (free tier at console.groq.com) in server/.env.`;
       }
       return msg;
     }
@@ -59,9 +143,76 @@ function parseProviderError(err, provider) {
     /* not JSON */
   }
   if (/credit balance|billing|quota/i.test(raw)) {
-    return `AI provider billing issue. Set CHAT_PROVIDER=openai with OPENAI_API_KEY, or CHAT_PROVIDER=grok with XAI_API_KEY in server/.env.`;
+    if (getGroqCloudApiKey()) {
+      return "Primary AI provider billing issue. Verify GROQCLOUD_API_KEY is valid.";
+    }
+    return "AI provider billing issue. Add GROQCLOUD_API_KEY in server/.env for Groq Cloud fallback.";
   }
   return raw;
+}
+
+async function runOpenAICompatibleChat({ res, config, systemPrompt, messages }) {
+  let streamed = await streamOpenAICompatible({
+    res,
+    baseUrl: config.baseUrl,
+    apiKey: config.apiKey,
+    model: config.model,
+    systemPrompt,
+    messages,
+  });
+  if (!streamed) {
+    const text = await completeOpenAICompatible({
+      baseUrl: config.baseUrl,
+      apiKey: config.apiKey,
+      model: config.model,
+      systemPrompt,
+      messages,
+    });
+    if (text) {
+      res.write(`data: ${JSON.stringify({ text })}\n\n`);
+      streamed = true;
+    }
+  }
+  return streamed;
+}
+
+/** Try each provider in order; fall back to Groq Cloud on billing/quota errors. */
+async function runChatWithFallback({ res, systemPrompt, messages }) {
+  const chain = buildChatProviderChain().filter((p) => getProviderConfig(p));
+  if (!chain.length) {
+    throw new Error(
+      "No AI provider configured. Set OPENAI_API_KEY, XAI_API_KEY, or GROQCLOUD_API_KEY in server/.env.",
+    );
+  }
+
+  let lastErr;
+  for (let i = 0; i < chain.length; i++) {
+    const provider = chain[i];
+    const config = getProviderConfig(provider);
+    try {
+      if (config.kind === "anthropic") {
+        let streamed = await streamAnthropicChat({ res, systemPrompt, messages });
+        if (!streamed) {
+          const text = await completeAnthropicChat({ systemPrompt, messages });
+          if (text) res.write(`data: ${JSON.stringify({ text })}\n\n`);
+        }
+        return;
+      }
+      await runOpenAICompatibleChat({ res, config, systemPrompt, messages });
+      return;
+    } catch (err) {
+      lastErr = err;
+      const canRetry = isBillingOrQuotaError(err) && i < chain.length - 1;
+      if (canRetry) {
+        console.warn(
+          `[chat] ${config.label} failed (${err.message?.slice(0, 80)}…), trying ${chain[i + 1]}…`,
+        );
+        continue;
+      }
+      throw Object.assign(err, { provider });
+    }
+  }
+  throw lastErr;
 }
 
 /**
@@ -189,7 +340,7 @@ async function completeAnthropicChat({ systemPrompt, messages }) {
   return block?.text || "";
 }
 
-// ── POST /api/ai/chat — streaming career assistant (OpenAI, Grok, or Claude) ──
+// ── POST /api/ai/chat — streaming assistant (OpenAI → Grok → Groq Cloud fallback) ──
 router.post("/chat", protect, async (req, res, next) => {
   try {
     const { message, history = [] } = req.body;
@@ -199,28 +350,10 @@ router.post("/chat", protect, async (req, res, next) => {
       return res.status(400).json({ message: "Message is required." });
     }
 
-    const provider = resolveChatProvider();
-    if (!provider) {
+    if (!hasAnyChatProvider()) {
       return res.status(503).json({
         message:
-          "No AI provider configured. Set OPENAI_API_KEY (ChatGPT), XAI_API_KEY (Grok), or ANTHROPIC_API_KEY (Claude). Optional: CHAT_PROVIDER=openai|grok|anthropic.",
-      });
-    }
-
-    if (provider === "openai" && !process.env.OPENAI_API_KEY) {
-      return res.status(503).json({
-        message: "CHAT_PROVIDER or auto-selection chose OpenAI but OPENAI_API_KEY is missing.",
-      });
-    }
-    if (provider === "grok" && !process.env.XAI_API_KEY) {
-      return res.status(503).json({
-        message: "CHAT_PROVIDER or auto-selection chose Grok but XAI_API_KEY is missing.",
-      });
-    }
-    if (provider === "anthropic" && !process.env.ANTHROPIC_API_KEY) {
-      return res.status(503).json({
-        message:
-          "CHAT_PROVIDER or auto-selection chose Anthropic but ANTHROPIC_API_KEY is missing.",
+          "No AI provider configured. Set OPENAI_API_KEY, XAI_API_KEY, or GROQCLOUD_API_KEY in server/.env. Optional: CHAT_PROVIDER=openai|grok|groq.",
       });
     }
 
@@ -243,58 +376,11 @@ router.post("/chat", protect, async (req, res, next) => {
     res.flushHeaders();
 
     try {
-      let streamed = false;
-
-      if (provider === "openai") {
-        streamed = await streamOpenAICompatible({
-          res,
-          baseUrl: process.env.OPENAI_BASE_URL || "https://api.openai.com/v1",
-          apiKey: process.env.OPENAI_API_KEY,
-          model: process.env.OPENAI_CHAT_MODEL || "gpt-4o-mini",
-          systemPrompt,
-          messages,
-        });
-        if (!streamed) {
-          const text = await completeOpenAICompatible({
-            baseUrl: process.env.OPENAI_BASE_URL || "https://api.openai.com/v1",
-            apiKey: process.env.OPENAI_API_KEY,
-            model: process.env.OPENAI_CHAT_MODEL || "gpt-4o-mini",
-            systemPrompt,
-            messages,
-          });
-          if (text) res.write(`data: ${JSON.stringify({ text })}\n\n`);
-        }
-      } else if (provider === "grok") {
-        streamed = await streamOpenAICompatible({
-          res,
-          baseUrl: process.env.XAI_BASE_URL || "https://api.x.ai/v1",
-          apiKey: process.env.XAI_API_KEY,
-          model: process.env.XAI_CHAT_MODEL || "grok-2-latest",
-          systemPrompt,
-          messages,
-        });
-        if (!streamed) {
-          const text = await completeOpenAICompatible({
-            baseUrl: process.env.XAI_BASE_URL || "https://api.x.ai/v1",
-            apiKey: process.env.XAI_API_KEY,
-            model: process.env.XAI_CHAT_MODEL || "grok-2-latest",
-            systemPrompt,
-            messages,
-          });
-          if (text) res.write(`data: ${JSON.stringify({ text })}\n\n`);
-        }
-      } else {
-        streamed = await streamAnthropicChat({ res, systemPrompt, messages });
-        if (!streamed) {
-          const text = await completeAnthropicChat({ systemPrompt, messages });
-          if (text) res.write(`data: ${JSON.stringify({ text })}\n\n`);
-        }
-      }
-
+      await runChatWithFallback({ res, systemPrompt, messages });
       res.write("data: [DONE]\n\n");
       res.end();
     } catch (err) {
-      const friendly = parseProviderError(err, provider);
+      const friendly = parseProviderError(err, err.provider || "AI");
       if (res.headersSent) {
         res.write(`data: ${JSON.stringify({ error: friendly })}\n\n`);
         res.write("data: [DONE]\n\n");

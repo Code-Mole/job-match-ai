@@ -96,7 +96,7 @@ router.get('/match', protect, async (req, res, next) => {
 
     // Reload AI service with current jobs
     try {
-      await axios.post(`${AI_URL}/load-jobs`, { jobs }, { timeout: 8000 })
+      await axios.post(`${AI_URL}/load-jobs`, { jobs }, { timeout: 120000 });
     } catch { /* non-fatal */ }
 
     // Get scores — uses full CV text + strength weights for best-fit matching
@@ -105,13 +105,13 @@ router.get('/match', protect, async (req, res, next) => {
       {
         skills: user.skills,
         years_exp: user.yearsExp || 0,
-        cv_text: user.cvText || '',
+        cv_text: user.cvText || "",
         strengths: user.skillStrengths || {},
         cv_roles: user.cvRoles || [],
         top_n: 25,
       },
-      { timeout: 15000 }
-    )
+      { timeout: 120000 },
+    );
 
     // Merge AI scores with full job documents
     const matches = (aiData.matches || []).map(m => {

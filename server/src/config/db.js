@@ -1,5 +1,5 @@
 import mongoose from "mongoose";
-import { wakeAiService,keepAiAlive } from "../utils/aiServiceManager";
+import { wakeAiService,keepAiAlive } from "../utils/aiServiceManager.js";
 
 const connectDB = async () => {
   try {

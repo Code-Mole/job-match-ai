@@ -9,7 +9,7 @@ import Job      from '../models/Job.js'
 import { protect } from '../middleware/auth.js'
 import { dedupeJobs } from '../utils/dedupeJobs.js'
 import { fileURLToPath } from "url";
-import { wakeAiService } from '../utils/aiServiceManager.js'
+
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -64,7 +64,7 @@ router.post('/parse', protect, upload.single('file'), async (req, res, next) => 
     if (!req.file) {
       return res.status(400).json({ success: false, message: 'No file received.' })
     }
-     await wakeAiService();
+     
     const AI_URL     = process.env.AI_SERVICE_URL || 'http://localhost:8000'
     let skills       = []
     let yearsExp     = 0

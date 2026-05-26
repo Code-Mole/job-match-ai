@@ -13,6 +13,9 @@ import jobRoutes from "./routes/jobs.js";
 import cvRoutes from "./routes/cv.js";
 import aiRoutes from "./routes/ai.js";
 
+// AI keep-alive
+import { startAiKeepAlive, stopAiKeepAlive } from "./utils/aiServiceManager.js";
+
 dotenv.config();
 // ── Connect to MongoDB ────────────────────────────────────────────────────────
 connectDB();
@@ -85,6 +88,27 @@ app.use(errorHandler);
 app.listen(PORT, () => {
   console.log(`🚀 Server running on http://localhost:${PORT}`);
   console.log(`📋 Environment: ${process.env.NODE_ENV}`);
+  // Start AI keep-alive pings
+  startAiKeepAlive();
+});
+
+// ── Graceful shutdown ────────────────────────────────────────────────────────
+process.on("SIGINT", () => {
+  console.log("🛑 Shutting down server...");
+
+  stopAiKeepAlive();
+  server.close(() => {
+    process.exit(0);
+  });
+});
+
+process.on("SIGTERM", () => {
+  console.log("🛑 SIGTERM received...");
+
+  stopAiKeepAlive();
+  server.close(() => {
+    process.exit(0);
+  });
 });
 
 export default app;

@@ -6,7 +6,7 @@ import { protect } from '../middleware/auth.js'
 import { syncJobs } from '../services/jobsApiService.js'
 import { dedupeJobs } from '../utils/dedupeJobs.js'
 import { sendApplicationEmail } from '../utils/email.js'
-import { wakeAiService } from '../utils/aiServiceManager.js'
+
 
 const router = express.Router();
 // ── GET /api/jobs — List with filters + pagination ───────────────────────────
@@ -63,7 +63,7 @@ router.get('/', async (req, res, next) => {
 // ── GET /api/jobs/match — AI scores merged with full job data ─────────────────
 router.get('/match', protect, async (req, res, next) => {
   try {
-    await wakeAiService();
+   
     const user    = req.user
     const AI_URL  = process.env.AI_SERVICE_URL || 'http://localhost:8000'
 

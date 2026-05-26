@@ -16,7 +16,7 @@ export async function wakeAiService() {
   for (let i = 1; i <= MAX_TRIES; i++) {
     try {
       const { data } = await axios.get(`${AI_URL}/health`, {
-        timeout: 30000,
+        timeout: 120000,
       });
 
       if (data.status === "ok") {
@@ -37,19 +37,47 @@ export async function wakeAiService() {
 /**
  * Keep AI service alive
  */
-export function keepAiAlive() {
-  setInterval(
-    async () => {
-      try {
-        await axios.get(`${AI_URL}/health`, {
-          timeout: 10000,
-        });
+  let interval;
 
-        console.log("🤖 AI keepAlive ping success");
-      } catch (err) {
-        console.error("❌ AI keepAlive failed");
-      }
-    },
-    10 * 60 * 1000,
-  );
-}
+  /**
+   * Starts background keep-alive ping to AI service
+   */
+  export const startAiKeepAlive = () => {
+    // immediate warm-up on server start
+    wakeAiService().catch(() => {});
+
+    // periodic keep-alive ping
+    interval = setInterval(
+      () => {
+        wakeAiService().catch(() => {});
+      },
+      4 * 60 * 1000,
+    ); // every 4 minutes
+  };
+
+  /**
+   * Stops the keep-alive interval (for graceful shutdown)
+   */
+  export const stopAiKeepAlive = () => {
+    if (interval) {
+      clearInterval(interval);
+      interval = null;
+    }
+  };
+
+// export function keepAiAlive() {
+//   setInterval(
+//     async () => {
+//       try {
+//         await axios.get(`${AI_URL}/health`, {
+//           timeout: 10000,
+//         });
+
+//         console.log("🤖 AI keepAlive ping success");
+//       } catch (err) {
+//         console.error("❌ AI keepAlive failed");
+//       }
+//     },
+//     10 * 60 * 1000,
+//   );
+// }

@@ -6,6 +6,7 @@ import morgan from "morgan";
 import connectDB from "./config/db.js";
 import { errorHandler, notFound } from "./middleware/errorHandler.js";
 
+
 // Route imports
 import authRoutes from "./routes/auth.js";
 import jobRoutes from "./routes/jobs.js";

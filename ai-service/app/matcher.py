@@ -40,7 +40,7 @@ STOP_WORDS = {
     "work","working","team","looking","strong","good","excellent","ability",
     "knowledge","understanding","familiarity","skills","skill","using","use",
     "proficient","proficiency","expertise","including","include","such","etc",
-    "also","well","great","preferred","required","must","plus","bonus",
+    "also","well","great","preferred","required","must","plus","bonus","university","degree","bachelor","master","phd","high","school","college",
 }
 
 

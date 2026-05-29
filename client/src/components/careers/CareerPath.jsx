@@ -118,12 +118,32 @@ const COLOR_MAP = {
   },
 };
 
-export default function CareerPath() {
+const PATH_COLORS = ["blue", "indigo", "purple", "emerald"];
+
+function normalizePaths(paths, roles) {
+  if (paths?.length) {
+    return paths.map((p, i) => ({
+      id: p.id || `path-${i}`,
+      title: p.track || "Your career track",
+      color: PATH_COLORS[i % PATH_COLORS.length],
+      steps: (p.steps || []).map((s) => ({
+        role: s.level,
+        years: s.years,
+        salary: "",
+        skills: s.focus ? s.focus.split(/,\s*/) : [],
+      })),
+    }));
+  }
+  return CAREER_PATHS;
+}
+
+export default function CareerPath({ paths, roles }) {
   const navigate = useNavigate();
+  const displayPaths = normalizePaths(paths, roles);
 
   return (
     <div className="space-y-8">
-      {CAREER_PATHS.map((path) => {
+      {displayPaths.map((path) => {
         const c = COLOR_MAP[path.color];
         return (
           <div

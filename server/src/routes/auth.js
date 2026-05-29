@@ -9,7 +9,10 @@ import {
   isSmtpConfigured,
   verifySmtpConnection,
   sendMail,
+  sendJobMatchesEmail,
 } from "../utils/email.js";
+import { loadFilteredJobs, scoreJobsForUser } from "../utils/jobMatchHelper.js";
+import { buildCareerInsights } from "../services/careerInsightsService.js";
 import {
   getGoogleAuthUrl,
   getLinkedInAuthUrl,
@@ -274,7 +277,6 @@ router.get('/export', protect, async (req, res, next) => {
 router.get('/stats', protect, async (req, res, next) => {
   try {
     const user = req.user
-    const AI_URL = process.env.AI_SERVICE_URL || 'http://localhost:8000'
 
     const [totalJobs, appliedCount, savedCount] = await Promise.all([
       Job.countDocuments({ isActive: true }),
@@ -285,37 +287,24 @@ router.get('/stats', protect, async (req, res, next) => {
     let avgMatchScore = null
     let topMatchScore = null
 
-    if (user.skills?.length) {
+    if (user.skills?.length || user.cvText) {
       try {
-        const jobs = await Job.find({ isActive: true }).lean().limit(100)
+        const jobs = await loadFilteredJobs({}, 150);
         if (jobs.length) {
-          try {
-            await axios.post(`${AI_URL}/load-jobs`, { jobs }, { timeout: 8000 })
-          } catch { /* non-fatal */ }
-
-          const { data: aiData } = await axios.post(
-            `${AI_URL}/match`,
-            {
-              skills: user.skills,
-              years_exp: user.yearsExp || 0,
-              cv_text: user.cvText || '',
-              strengths: user.skillStrengths || {},
-              cv_roles: user.cvRoles || [],
-              top_n: 15,
-            },
-            { timeout: 15000 },
-          )
-          const scores = (aiData.matches || [])
+          const aiMatches = await scoreJobsForUser(user, jobs, jobs.length);
+          const scores = aiMatches
             .map((m) => m.match_score)
-            .filter((s) => typeof s === 'number')
+            .filter((s) => typeof s === "number" && s > 0);
           if (scores.length) {
             avgMatchScore = Math.round(
               scores.reduce((a, b) => a + b, 0) / scores.length,
-            )
-            topMatchScore = Math.max(...scores)
+            );
+            topMatchScore = Math.max(...scores);
           }
         }
-      } catch { /* AI optional */ }
+      } catch {
+        /* AI optional */
+      }
     }
 
     const skillPts = Math.min(30, (user.skills?.length || 0) * 3)
@@ -346,6 +335,42 @@ router.get('/stats', protect, async (req, res, next) => {
     })
   } catch (err) { next(err) }
 })
+
+// ── GET /api/auth/career-insights — dynamic careers data from CV + matches ───
+router.get("/career-insights", protect, async (req, res, next) => {
+  try {
+    const insights = await buildCareerInsights(req.user);
+    res.json({ success: true, ...insights });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ── POST /api/auth/settings/notification-test ─────────────────────────────────
+router.post("/settings/notification-test", protect, async (req, res, next) => {
+  try {
+    if (!isSmtpConfigured()) {
+      return res.status(400).json({
+        success: false,
+        message: "SMTP is not configured. Add SMTP_* variables to server/.env",
+      });
+    }
+
+    const jobs = await loadFilteredJobs({}, 80);
+    const matches = await scoreJobsForUser(req.user, jobs, 5);
+
+    await sendJobMatchesEmail(req.user, matches.slice(0, 5));
+    res.json({
+      success: true,
+      message: `Sample job-match email sent to ${req.user.email}`,
+    });
+  } catch (err) {
+    res.status(400).json({
+      success: false,
+      message: err.message || "Failed to send notification test email.",
+    });
+  }
+});
 
 // ── GET /api/auth/settings/email-status ─────────────────────────────────────
 router.get('/settings/email-status', protect, async (req, res) => {

@@ -121,11 +121,34 @@ class JobMatcher:
         ]
         return " ".join(p for p in parts if p)
 
+    def _extract_education_text(self, cv_text: str) -> str:
+        """Pull education-related lines for semantic matching."""
+        if not cv_text:
+            return ""
+        edu_headers = re.compile(
+            r"(?:^|\n)\s*(education|academic|qualifications?|degrees?)\s*[:\-]?\s*\n",
+            re.I | re.M,
+        )
+        chunks = []
+        for m in edu_headers.finditer(cv_text):
+            chunk = cv_text[m.end() : m.end() + 1200]
+            chunks.append(chunk.split("\n\n")[0])
+        if not chunks:
+            for line in cv_text.split("\n"):
+                if re.search(
+                    r"\b(bachelor|master|phd|b\.?sc|m\.?sc|degree|university|college)\b",
+                    line,
+                    re.I,
+                ):
+                    chunks.append(line)
+        return " ".join(chunks)[:2000]
+
     def _build_user_document(self, user_skills: list, cv_text: str = "") -> str:
         """Build the user's document for matching against jobs."""
+        education = self._extract_education_text(cv_text)
         parts = [
             cv_text,
-            # Repeat skills 3x, same weighting as job skills
+            education,
             " ".join(user_skills) * 3,
         ]
         return " ".join(p for p in parts if p)
@@ -234,21 +257,30 @@ class JobMatcher:
         featured_bonus = 0.05 if job.get("featured", False) else 0.0
         return min(trend_score + featured_bonus, 1.0)
 
-    def _compute_cultural_fit(self, user_skills: list, job: dict) -> float:
+    def _compute_cultural_fit(
+        self, user_skills: list, job: dict, user_domains: Optional[list] = None
+    ) -> float:
         """
-        Placeholder cultural fit score — in production this would incorporate
-        company values, work style preferences, industry alignment, etc.
-        For now: score based on remote preference match + industry alignment.
+        Industry/domain alignment + remote preference heuristic.
         Returns 0.0–1.0
         """
-        # Simple heuristic: remote jobs get a slight boost (most candidates prefer remote)
-        remote_bonus = 0.1 if job.get("remote", False) else 0.0
+        remote_bonus = 0.08 if job.get("remote", False) else 0.0
 
-        # Industry alignment bonus — if job industry matches common user fields
-        high_demand_industries = {"AI/ML", "Developer Tools", "Fintech", "Infrastructure"}
-        industry_bonus = 0.1 if job.get("industry", "") in high_demand_industries else 0.0
+        job_industry = (job.get("industry") or "").lower()
+        industry_bonus = 0.0
+        if job_industry and user_domains:
+            for d in user_domains:
+                if d.lower() in job_industry or job_industry in d.lower():
+                    industry_bonus = 0.15
+                    break
 
-        return min(0.75 + remote_bonus + industry_bonus, 1.0)
+        # Keyword overlap between user skills and job industry label
+        if not industry_bonus and job_industry:
+            skill_blob = " ".join(user_skills).lower()
+            tokens = [t for t in re.findall(r"[a-z]{4,}", job_industry) if t in skill_blob]
+            industry_bonus = min(0.12, len(tokens) * 0.04)
+
+        return min(0.72 + remote_bonus + industry_bonus, 1.0)
 
     def _apply_dynamic_scores(self, results: list) -> list:
         """
@@ -330,7 +362,7 @@ class JobMatcher:
             )
             role_score = self._compute_role_fit(roles, job)
             growth_score = self._compute_growth_alignment(job)
-            culture_score = self._compute_cultural_fit(user_skills, job)
+            culture_score = self._compute_cultural_fit(user_skills, job, user_domains)
 
             job_domains = classify_job_domain({**job, "skills": job_skills})
             domain_score = domain_alignment_score(user_domains, job_domains)

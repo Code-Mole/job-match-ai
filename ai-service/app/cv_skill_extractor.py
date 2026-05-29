@@ -81,16 +81,72 @@ STOP_PHRASES = {
     "january", "february", "march", "april", "may", "june", "july", "august",
     "september", "october", "november", "december", "present", "email", "phone",
     "address", "linkedin", "curriculum", "vitae", "resume", "references",
+    "employed", "unemployed", "employment", "full-time", "part-time", "internship",
+    "objective", "summary", "profile", "contact", "nationality", "gender",
+}
+
+# Phrases that are education, locations, or status — not skills
+NOISE_SKILL_PATTERNS = [
+    re.compile(
+        r"\b(bachelor|master|phd|b\.?sc|m\.?sc|b\.?a|m\.?a|mba|degree|diploma|"
+        r"university|college|school|faculty|graduat)\b",
+        re.I,
+    ),
+    re.compile(r"\b(computer science|information technology)\s+(university|college|of)\b", re.I),
+    re.compile(r"\b(employed|unemployed|self[- ]?employed|work experience)\b", re.I),
+    re.compile(r"^\d{4}\s*[-–]\s*\d{4}$"),
+    re.compile(r"^\d+\s*years?\s+(of\s+)?experience", re.I),
+]
+
+KNOWN_ACRONYMS = {
+    "aws", "gcp", "api", "sql", "css", "html", "git", "crm", "erp", "hr", "ui", "ux",
+    "rn", "lpn", "cpr", "osha", "pmp",
 }
 
 
 def _clean_phrase(phrase: str) -> str:
     p = re.sub(r"\s+", " ", phrase).strip(" .,;:-")
-    if len(p) < 3 or len(p) > 55:
+    if len(p) < 2 or len(p) > 55:
         return ""
     if p.lower() in STOP_PHRASES:
         return ""
     return p
+
+
+def _is_valid_skill(phrase: str) -> bool:
+    """Reject education lines, employment status, locations, and other noise."""
+    if not phrase:
+        return False
+    low = phrase.lower().strip()
+    if low in STOP_PHRASES:
+        return False
+    if len(low) < 2:
+        return False
+    # Too many words → likely a sentence, not a skill
+    words = low.split()
+    if len(words) > 5:
+        return False
+    for pat in NOISE_SKILL_PATTERNS:
+        if pat.search(phrase):
+            return False
+    # "Bachelor of Science", "Computer Science UNIVERSITY OF"
+    if re.search(r"\b(of|in|at)\b", low) and re.search(
+        r"\b(science|arts|engineering|studies|university|college)\b", low
+    ):
+        return False
+    # ALL CAPS single token (often city/region) unless known acronym
+    if (
+        phrase.isupper()
+        and " " not in phrase
+        and len(phrase) > 3
+        and low not in KNOWN_ACRONYMS
+        and low not in _ALL_ALIASES
+    ):
+        return False
+    # Must contain at least one letter; not purely numeric
+    if not re.search(r"[a-zA-Z]", phrase):
+        return False
+    return True
 
 
 def _find_alias_in_text(text_lower: str, alias: str) -> bool:
@@ -116,7 +172,7 @@ def extract_skills_from_cv_text(text: str) -> list:
 
     # 1) Ontology + general skills (all industries)
     for alias, canonical in _ALL_ALIASES.items():
-        if _find_alias_in_text(text_lower, alias):
+        if _find_alias_in_text(text_lower, alias) and _is_valid_skill(canonical):
             found[canonical.lower()] = canonical
 
     # 2) Dedicated skills section — comma/bullet lists
@@ -127,31 +183,36 @@ def extract_skills_from_cv_text(text: str) -> list:
         section = chunk[: end.start()] if end else chunk[:1200]
         for part in re.split(r"[,;•\|\n]|(?:\s+and\s+)", section):
             phrase = _clean_phrase(part)
-            if not phrase:
+            if not phrase or not _is_valid_skill(phrase):
                 continue
             canonical = normalize_skill(phrase)
             key = canonical.lower()
-            if key not in found:
+            if key not in found and _is_valid_skill(canonical):
                 found[key] = canonical if canonical != phrase.lower() else phrase.title()
 
     # 3) Bullet lines that look like competencies
     for m in BULLET_SKILL.finditer(text):
         phrase = _clean_phrase(m.group(1))
-        if phrase and len(phrase.split()) <= 6:
+        if phrase and len(phrase.split()) <= 6 and _is_valid_skill(phrase):
             canonical = normalize_skill(phrase)
             key = canonical.lower()
-            if key not in found:
+            if key not in found and _is_valid_skill(canonical):
                 found[key] = canonical if canonical != phrase.lower() else phrase.title()
 
     # 4) Parenthetical / pipe skills in summary (e.g. "Sales | CRM | Negotiation")
     for m in re.finditer(r"\b([A-Za-z][A-Za-z0-9\s]{2,30})\s*\|\s*([A-Za-z][A-Za-z0-9\s]{2,30})", text):
         for g in m.groups():
             phrase = _clean_phrase(g)
-            if phrase:
+            if phrase and _is_valid_skill(phrase):
                 canonical = normalize_skill(phrase)
-                found[canonical.lower()] = canonical if canonical != phrase.lower() else phrase.title()
+                if _is_valid_skill(canonical):
+                    found[canonical.lower()] = (
+                        canonical if canonical != phrase.lower() else phrase.title()
+                    )
 
-    return sorted(found.values(), key=lambda s: s.lower())
+    # Final pass — drop anything that slipped through filters
+    cleaned = [s for s in found.values() if _is_valid_skill(s)]
+    return sorted(cleaned, key=lambda s: s.lower())
 
 
 def extract_roles_from_cv(text: str) -> list:

@@ -32,7 +32,7 @@ export default function AssistantPage() {
   };
 
   return (
-    <AppLayout>
+    <AppLayout showFooter={false}>
       <div className="flex flex-col h-full max-w-4xl mx-auto px-3 sm:px-4 py-4 sm:py-6 min-h-0">
         {/* ── Page header ──────────────────────────── */}
         <div className="flex flex-col gap-4 mb-6 sm:flex-row sm:items-start sm:justify-between sm:gap-4 flex-shrink-0 px-1">

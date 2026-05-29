@@ -1,10 +1,12 @@
 import { useState } from "react";
 import Sidebar from "./SideBar";
 import Header from "./Header";
+import Footer from "./Footer";
 
 // children = the page content (Dashboard, Jobs, etc.)
 // onSearch is optional — passes search query up to the page
-export default function AppLayout({ children, onSearch }) {
+// showFooter=false hides footer (e.g. AI Assistant full-height chat)
+export default function AppLayout({ children, onSearch, showFooter = true }) {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   return (
@@ -31,7 +33,10 @@ export default function AppLayout({ children, onSearch }) {
         />
 
         {/* Page content scrolls independently of sidebar */}
-        <main className="flex-1 overflow-y-auto min-h-0">{children}</main>
+        <main className="flex-1 overflow-y-auto min-h-0 flex flex-col">
+          <div className="flex-1 min-h-0">{children}</div>
+          {showFooter && <Footer />}
+        </main>
       </div>
     </div>
   );

@@ -149,6 +149,13 @@ const jobSchema = new mongoose.Schema(
       sparse: true,
     },
 
+    /** Normalized title|company|location — dedupes same role across providers */
+    fingerprint: {
+      type: String,
+      trim: true,
+      index: true,
+    },
+
     source: {
       type: String,
       enum: ["manual", "adzuna", "remotive", "seed"],
@@ -166,5 +173,7 @@ jobSchema.index({
   description: "text",
   company: "text",
 });
+
+jobSchema.index({ fingerprint: 1 }, { unique: true, sparse: true });
 
 export default mongoose.model("Job", jobSchema);

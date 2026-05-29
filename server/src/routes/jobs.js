@@ -6,6 +6,11 @@ import { protect } from '../middleware/auth.js'
 import { syncJobs } from '../services/jobsApiService.js'
 import { dedupeJobs } from '../utils/dedupeJobs.js'
 import { sendApplicationEmail } from '../utils/email.js'
+import {
+  buildJobFilter,
+  loadFilteredJobs,
+  scoreJobsForUser,
+} from '../utils/jobMatchHelper.js'
 
 
 const router = express.Router();
@@ -60,106 +65,121 @@ router.get('/', async (req, res, next) => {
   }
 })
 
-// ── GET /api/jobs/match — AI scores merged with full job data ─────────────────
+function mergeMatchResults(jobs, aiMatches) {
+  const byId = new Map(jobs.map((j) => [j._id.toString(), j]));
+
+  const matches = (aiMatches || [])
+    .map((m) => {
+      const job =
+        byId.get(String(m.job_id)) ||
+        jobs.find((j) => j.externalId === m.job_id);
+      if (!job) return null;
+      return {
+        job_id: job._id,
+        title: job.title,
+        company: job.company,
+        location: job.location,
+        salary: job.salary,
+        type: job.type,
+        remote: job.remote,
+        level: job.level,
+        industry: job.industry,
+        applyUrl: job.applyUrl,
+        skills: job.skills,
+        match_score: m.match_score,
+        matched_skills: m.matched_skills,
+        missing_skills: m.missing_skills,
+        component_scores: m.component_scores,
+      };
+    })
+    .filter(Boolean);
+
+  return dedupeJobs(
+    matches.map((m) => ({ ...m, _id: m.job_id, externalId: m.job_id })),
+  ).map((m) => ({
+    job_id: m.job_id || m._id,
+    title: m.title,
+    company: m.company,
+    location: m.location,
+    salary: m.salary,
+    type: m.type,
+    remote: m.remote,
+    level: m.level,
+    industry: m.industry,
+    applyUrl: m.applyUrl,
+    skills: m.skills,
+    match_score: m.match_score,
+    matched_skills: m.matched_skills,
+    missing_skills: m.missing_skills,
+    component_scores: m.component_scores,
+  }));
+}
+
+// ── GET /api/jobs/match — AI-ranked jobs (supports filters + pagination) ───────
 router.get('/match', protect, async (req, res, next) => {
   try {
-   
-    const user    = req.user
-    const AI_URL  = process.env.AI_SERVICE_URL || 'http://localhost:8000'
+    const user = req.user;
+    const {
+      search,
+      location,
+      type,
+      remote,
+      level,
+      salaryMin,
+      salaryMax,
+      page = 1,
+      limit = 12,
+    } = req.query;
+
+    const pageNum = Math.max(1, Number(page));
+    const limitNum = Math.min(50, Math.max(1, Number(limit)));
 
     if (!user.skills?.length && !user.cvText) {
-      // No CV/skills yet — return plain recent jobs with null scores
-      const jobs = await Job.find({ isActive: true })
+      const filter = buildJobFilter(req.query);
+      const jobs = await Job.find(filter)
         .sort({ postedAt: -1 })
-        .limit(10)
-        .lean()
+        .skip((pageNum - 1) * limitNum)
+        .limit(limitNum)
+        .lean();
+      const total = await Job.countDocuments(filter);
 
       return res.json({
         success: true,
-        matches: jobs.map(j => ({
-          job_id:      j._id,
-          title:       j.title,
-          company:     j.company,
-          location:    j.location,
-          salary:      j.salary,
-          type:        j.type,
-          remote:      j.remote,
-          level:       j.level,
+        matches: jobs.map((j) => ({
+          job_id: j._id,
+          title: j.title,
+          company: j.company,
+          location: j.location,
+          salary: j.salary,
+          type: j.type,
+          remote: j.remote,
+          level: j.level,
           match_score: null,
           matched_skills: [],
           missing_skills: j.skills || [],
           component_scores: {},
         })),
-      })
+        total,
+        page: pageNum,
+        pages: Math.ceil(total / limitNum) || 1,
+      });
     }
 
-    // Load jobs from DB
-    const jobs = await Job.find({ isActive: true }).lean().limit(100)
+    const jobs = await loadFilteredJobs(req.query, 200);
+    const aiMatches = await scoreJobsForUser(user, jobs, jobs.length);
+    const allMatches = mergeMatchResults(jobs, aiMatches);
 
-    // Reload AI service with current jobs
-    try {
-      await axios.post(`${AI_URL}/load-jobs`, { jobs }, { timeout: 120000 });
-    } catch { /* non-fatal */ }
+    const total = allMatches.length;
+    const start = (pageNum - 1) * limitNum;
+    const pageMatches = allMatches.slice(start, start + limitNum);
 
-    // Get scores — uses full CV text + strength weights for best-fit matching
-    const { data: aiData } = await axios.post(
-      `${AI_URL}/match`,
-      {
-        skills: user.skills,
-        years_exp: user.yearsExp || 0,
-        cv_text: user.cvText || "",
-        strengths: user.skillStrengths || {},
-        cv_roles: user.cvRoles || [],
-        top_n: 25,
-      },
-      { timeout: 120000 },
-    );
-
-    // Merge AI scores with full job documents
-    const matches = (aiData.matches || []).map(m => {
-      const job = jobs.find(j =>
-        j._id.toString() === m.job_id || j.externalId === m.job_id
-      )
-      if (!job) return null
-      return {
-        job_id:           job._id,
-        title:            job.title,
-        company:          job.company,
-        location:         job.location,
-        salary:           job.salary,
-        type:             job.type,
-        remote:           job.remote,
-        level:            job.level,
-        industry:         job.industry,
-        applyUrl:         job.applyUrl,
-        match_score:      m.match_score,
-        matched_skills:   m.matched_skills,
-        missing_skills:   m.missing_skills,
-        component_scores: m.component_scores,
-      }
-    }).filter(Boolean)
-
-    const uniqueMatches = dedupeJobs(
-      matches.map((m) => ({ ...m, _id: m.job_id, externalId: m.job_id })),
-    ).map((m) => ({
-      job_id: m.job_id || m._id,
-      title: m.title,
-      company: m.company,
-      location: m.location,
-      salary: m.salary,
-      type: m.type,
-      remote: m.remote,
-      level: m.level,
-      industry: m.industry,
-      applyUrl: m.applyUrl,
-      match_score: m.match_score,
-      matched_skills: m.matched_skills,
-      missing_skills: m.missing_skills,
-      component_scores: m.component_scores,
-    }))
-
-    res.json({ success: true, matches: uniqueMatches })
-
+    res.json({
+      success: true,
+      matches: pageMatches,
+      total,
+      page: pageNum,
+      pages: Math.ceil(total / limitNum) || 1,
+    });
   } catch (err) {
     if (err.code === 'ECONNREFUSED') {
       // AI down — return jobs without scores

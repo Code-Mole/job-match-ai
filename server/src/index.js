@@ -6,7 +6,6 @@ import morgan from "morgan";
 import connectDB from "./config/db.js";
 import { errorHandler, notFound } from "./middleware/errorHandler.js";
 
-
 // Route imports
 import authRoutes from "./routes/auth.js";
 import jobRoutes from "./routes/jobs.js";
@@ -14,7 +13,7 @@ import cvRoutes from "./routes/cv.js";
 import aiRoutes from "./routes/ai.js";
 
 // AI keep-alive
-import { startAiKeepAlive, stopAiKeepAlive } from "./utils/aiServiceManager.js";
+// import { startAiKeepAlive, stopAiKeepAlive } from "./utils/aiServiceManager.js";
 
 dotenv.config();
 // ── Connect to MongoDB ────────────────────────────────────────────────────────
@@ -89,26 +88,26 @@ app.listen(PORT, () => {
   console.log(`🚀 Server running on http://localhost:${PORT}`);
   console.log(`📋 Environment: ${process.env.NODE_ENV}`);
   // Start AI keep-alive pings
-  startAiKeepAlive();
+  // startAiKeepAlive();
 });
 
 // ── Graceful shutdown ────────────────────────────────────────────────────────
-process.on("SIGINT", () => {
-  console.log("🛑 Shutting down server...");
+// process.on("SIGINT", () => {
+//   console.log("🛑 Shutting down server...");
 
-  stopAiKeepAlive();
-  server.close(() => {
-    process.exit(0);
-  });
-});
+//   stopAiKeepAlive();
+//   server.close(() => {
+//     process.exit(0);
+//   });
+// });
 
-process.on("SIGTERM", () => {
-  console.log("🛑 SIGTERM received...");
+// process.on("SIGTERM", () => {
+//   console.log("🛑 SIGTERM received...");
 
-  stopAiKeepAlive();
-  server.close(() => {
-    process.exit(0);
-  });
-});
+//   stopAiKeepAlive();
+//   server.close(() => {
+//     process.exit(0);
+//   });
+// });
 
 export default app;

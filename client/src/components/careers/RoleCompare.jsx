@@ -4,10 +4,9 @@ import { CAREER_ROLES, formatSalary } from "../../data/careersData";
 import TrendBadge from "./TrendBadge";
 import SalaryBar from "./SalaryBar";
 
-const GLOBAL_MAX = Math.max(...CAREER_ROLES.map((r) => r.salaryMax));
 
 // Single role column for the comparison view
-function RoleColumn({ role, colorClass }) {
+function RoleColumn({ role, colorClass, globalMax = 150000 }) {
   if (!role)
     return (
       <div className="flex items-center justify-center h-64 rounded-2xl border-2 border-dashed border-slate-200 dark:border-white/10 text-slate-400 text-sm">
@@ -45,7 +44,7 @@ function RoleColumn({ role, colorClass }) {
             min={role.salaryMin}
             max={role.salaryMax}
             mid={role.salaryMid}
-            globalMax={GLOBAL_MAX}
+            globalMax={globalMax}
           />
         </div>
 
@@ -173,12 +172,15 @@ function RoleColumn({ role, colorClass }) {
   );
 }
 
-export default function RoleCompare() {
-  const [role1Id, setRole1Id] = useState("frontend");
-  const [role2Id, setRole2Id] = useState("fullstack");
+export default function RoleCompare({ roles = CAREER_ROLES }) {
+  const list = roles.length ? roles : CAREER_ROLES;
+  const GLOBAL_MAX = Math.max(...list.map((r) => r.salaryMax || 0), 1);
 
-  const role1 = CAREER_ROLES.find((r) => r.id === role1Id);
-  const role2 = CAREER_ROLES.find((r) => r.id === role2Id);
+  const [role1Id, setRole1Id] = useState(list[0]?.id || "frontend");
+  const [role2Id, setRole2Id] = useState(list[1]?.id || list[0]?.id || "fullstack");
+
+  const role1 = list.find((r) => r.id === role1Id) || list[0];
+  const role2 = list.find((r) => r.id === role2Id) || list[1] || list[0];
 
   const selectClass = `
     w-full px-4 py-3 rounded-xl text-sm font-medium
@@ -198,9 +200,10 @@ export default function RoleCompare() {
           onChange={(e) => setRole1Id(e.target.value)}
           className={selectClass}
         >
-          {CAREER_ROLES.map((r) => (
+          {list.map((r) => (
             <option key={r.id} value={r.id}>
               {r.title}
+              {r.matchScore != null ? ` (${r.matchScore}% match)` : ""}
             </option>
           ))}
         </select>
@@ -216,7 +219,7 @@ export default function RoleCompare() {
           onChange={(e) => setRole2Id(e.target.value)}
           className={selectClass}
         >
-          {CAREER_ROLES.map((r) => (
+          {list.map((r) => (
             <option key={r.id} value={r.id}>
               {r.title}
             </option>
@@ -229,10 +232,12 @@ export default function RoleCompare() {
         <RoleColumn
           role={role1}
           colorClass="border-blue-200 dark:border-blue-700/40"
+          globalMax={GLOBAL_MAX}
         />
         <RoleColumn
           role={role2}
           colorClass="border-indigo-200 dark:border-indigo-700/40"
+          globalMax={GLOBAL_MAX}
         />
       </div>
     </div>

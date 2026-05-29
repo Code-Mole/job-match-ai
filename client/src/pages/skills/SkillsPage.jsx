@@ -529,22 +529,25 @@ const TABS = [
 
 export default function SkillsPage() {
   const [activeTab, setActiveTab] = useState("gap");
+  const { user } = useAuth();
+  const skillCount = user?.skills?.length || 0;
 
   return (
     <AppLayout>
-      <div className="max-w-6xl mx-auto px-6 py-8">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
         {/* ── Page header ──────────────────────────── */}
         <div className="flex items-start gap-4 mb-8">
           <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-amber-500 to-orange-500 flex items-center justify-center flex-shrink-0">
             <Zap size={24} className="text-white" />
           </div>
           <div>
-            <h1 className="font-display font-bold text-3xl text-slate-900 dark:text-slate-50 mb-1">
+            <h1 className="font-display font-bold text-2xl sm:text-3xl text-slate-900 dark:text-slate-50 mb-1">
               Skills & Learning
             </h1>
-            <p className="text-slate-500 dark:text-slate-400">
-              Understand your skill gaps, manage your profile, and follow a
-              personalised learning path.
+            <p className="text-slate-500 dark:text-slate-400 text-sm sm:text-base">
+              {skillCount > 0
+                ? `Gap analysis and learning paths based on your ${skillCount} profile skills and top job matches.`
+                : "Upload your CV on the dashboard to unlock personalised gap analysis."}
             </p>
           </div>
         </div>

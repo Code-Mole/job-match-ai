@@ -8,6 +8,7 @@ import User     from '../models/User.js'
 import Job      from '../models/Job.js'
 import { protect } from '../middleware/auth.js'
 import { dedupeJobs } from '../utils/dedupeJobs.js'
+import { sendJobMatchesEmail, isSmtpConfigured } from '../utils/email.js'
 import { fileURLToPath } from "url";
 
 
@@ -197,6 +198,16 @@ router.post('/parse', protect, upload.single('file'), async (req, res, next) => 
       }
     } catch (matchErr) {
       console.warn('Match scoring failed:', matchErr.message)
+    }
+
+    if (
+      updatedUser.notificationPrefs?.jobMatches &&
+      isSmtpConfigured() &&
+      topMatches.length
+    ) {
+      sendJobMatchesEmail(updatedUser, topMatches.slice(0, 5)).catch((err) =>
+        console.warn('Match notification email failed:', err.message),
+      )
     }
 
     cleanup(filePath)

@@ -86,6 +86,34 @@ export async function sendMail({ to, subject, html, text }) {
   }
 }
 
+export async function sendJobMatchesEmail(user, matches = []) {
+  if (!isSmtpConfigured() || !matches.length) return null;
+
+  const rows = matches
+    .map((m) => {
+      const score = m.match_score != null ? `${m.match_score}%` : "—";
+      const title = m.title || m.job?.title || "Role";
+      const company = m.company || m.job?.company || "";
+      return `<li><strong>${title}</strong> at ${company} — ${score} match</li>`;
+    })
+    .join("");
+
+  return sendMail({
+    to: user.email,
+    subject: "Your top job matches — JobMatch AI",
+    html: `
+      <div style="font-family:sans-serif;max-width:560px;margin:0 auto">
+        <h2 style="color:#2563EB">Jobs matched to your profile</h2>
+        <p>Hi ${user.name?.split(" ")[0] || "there"},</p>
+        <p>Here are roles that closely fit your CV and skills:</p>
+        <ul>${rows}</ul>
+        <p><a href="${process.env.CLIENT_URL || "http://localhost:5173"}/jobs" style="color:#2563EB">View all matches →</a></p>
+      </div>
+    `,
+    text: "Your personalized job matches are ready on JobMatch AI.",
+  });
+}
+
 export async function sendApplicationEmail(user, job) {
   if (!isSmtpConfigured()) return null;
 

@@ -480,6 +480,7 @@
 
 import axios from "axios";
 import Job from "../models/Job.js";
+import { contentFingerprint } from "../utils/jobFingerprint.js";
 
 const ADZUNA_BASE = "https://api.adzuna.com/v1/api/jobs";
 const REMOTIVE_BASE = "https://remotive.com/api/remote-jobs";
@@ -733,18 +734,17 @@ function normaliseAdzuna(job) {
     .replace(/<[^>]*>/g, "")
     .slice(0, 5000);
 
+  const title = job.title || "Untitled Job";
+  const company = job.company?.display_name || "Unknown Company";
+  const location = job.location?.display_name || "Unknown";
+
   return {
     externalId: `adzuna-${job.id}`,
+    fingerprint: contentFingerprint({ title, company, location }),
+    title,
 
-    // UNIQUE fingerprint
-    fingerprint: `adzuna-${job.id}`,
-
-    title: job.title || "Untitled Job",
-
-    company: job.company?.display_name || "Unknown Company",
-
-    location: job.location?.display_name || "Unknown",
-
+    company,
+    location,
     type: normalizeJobType(job.contract_time),
 
     remote:
@@ -788,18 +788,16 @@ function normaliseRemotive(job) {
     .replace(/<[^>]*>/g, "")
     .slice(0, 5000);
 
+  const title = job.title || "Untitled Job";
+  const company = job.company_name || "Unknown Company";
+  const location = job.candidate_required_location || "Remote";
+
   return {
     externalId: `remotive-${job.id}`,
-
-    // CRITICAL FIX:
-    // Use UNIQUE job ID instead of title/company/location
-    fingerprint: `remotive-${job.id}`,
-
-    title: job.title || "Untitled Job",
-
-    company: job.company_name || "Unknown Company",
-
-    location: job.candidate_required_location || "Remote",
+    fingerprint: contentFingerprint({ title, company, location }),
+    title,
+    company,
+    location,
 
     type: "Full-time",
 
@@ -967,7 +965,7 @@ async function fetchRemotive() {
 
 function jobFingerprint(job) {
   if (job.fingerprint) return job.fingerprint.toLowerCase().trim();
-  return `${(job.title || "").toLowerCase().trim()}|${(job.company || "").toLowerCase().trim()}|${(job.location || "").toLowerCase().trim()}`;
+  return contentFingerprint(job);
 }
 
 /**
@@ -1013,22 +1011,56 @@ async function filterNewJobs(jobs) {
    INSERT NEW JOBS ONLY
 ========================= */
 
-async function insertNewJobs(jobs) {
+async function upsertJobs(jobs) {
   if (!jobs.length) return 0;
 
+  const ops = jobs.map((job) => ({
+    updateOne: {
+      filter: { $or: [{ externalId: job.externalId }, { fingerprint: job.fingerprint }] },
+      update: { $set: job },
+      upsert: true,
+    },
+  }));
+
   try {
-    const result = await Job.insertMany(jobs, { ordered: false });
-    console.log(`💾 Inserted ${result.length} new jobs`);
-    return result.length;
+    const result = await Job.bulkWrite(ops, { ordered: false });
+    const count = (result.upsertedCount || 0) + (result.modifiedCount || 0);
+    console.log(`💾 Upserted ${count} jobs (${result.upsertedCount || 0} new)`);
+    return count;
   } catch (err) {
-    if (err.code === 11000 || err.writeErrors) {
-      const inserted = err.insertedDocs?.length ?? 0;
-      console.warn(`⚠️ Partial insert: ${inserted} jobs (${err.writeErrors?.length || 0} duplicates skipped)`);
-      return inserted;
-    }
-    console.error("❌ Job insert failed", err.message);
+    console.error("❌ Job upsert failed", err.message);
     return 0;
   }
+}
+
+/** Remove duplicate rows sharing the same content fingerprint (keeps newest). */
+async function pruneDuplicateJobs() {
+  const dupes = await Job.aggregate([
+    { $match: { fingerprint: { $exists: true, $ne: "" } } },
+    {
+      $group: {
+        _id: "$fingerprint",
+        ids: { $push: "$_id" },
+        count: { $sum: 1 },
+      },
+    },
+    { $match: { count: { $gt: 1 } } },
+  ]);
+
+  let removed = 0;
+  for (const group of dupes) {
+    const docs = await Job.find({ fingerprint: group._id })
+      .sort({ postedAt: -1, updatedAt: -1 })
+      .select("_id")
+      .lean();
+    const toDelete = docs.slice(1).map((d) => d._id);
+    if (toDelete.length) {
+      await Job.deleteMany({ _id: { $in: toDelete } });
+      removed += toDelete.length;
+    }
+  }
+  if (removed) console.log(`🧹 Pruned ${removed} duplicate job records`);
+  return removed;
 }
 
 /* =========================
@@ -1087,13 +1119,15 @@ async function syncJobs(force = false, category = "all") {
 
     console.log("Merged jobs (pre DB-upsert):", merged.length);
 
-    // Dedupe only by provider listing id so two APIs may both list a similar role
-    // with different ids (kept as separate rows). Same id never upserts twice.
+    // Dedupe by content fingerprint first (same role from different APIs → one row)
     const uniqueMap = new Map();
 
     for (const job of merged) {
-      if (!job.externalId) continue;
-      uniqueMap.set(job.externalId, job);
+      if (!job.externalId || !job.fingerprint) continue;
+      const existing = uniqueMap.get(job.fingerprint);
+      if (!existing || (job.postedAt && existing.postedAt && job.postedAt > existing.postedAt)) {
+        uniqueMap.set(job.fingerprint, job);
+      }
     }
 
     const allJobs = [...uniqueMap.values()];
@@ -1110,10 +1144,12 @@ async function syncJobs(force = false, category = "all") {
       };
     }
 
-    const { newJobs, skipped } = await filterNewJobs(allJobs);
-    console.log(`New jobs to insert: ${newJobs.length} (skipped ${skipped} already in DB)`);
+    await pruneDuplicateJobs();
 
-    const saved = await insertNewJobs(newJobs);
+    const { skipped } = await filterNewJobs(allJobs);
+    console.log(`Upserting ${allJobs.length} unique jobs (${skipped} already up to date)`);
+
+    const saved = await upsertJobs(allJobs);
 
     // Backfill requirements on older rows that were synced before extraction existed
     const stale = await Job.find({

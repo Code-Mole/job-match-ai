@@ -197,8 +197,8 @@ function NotificationsTab() {
 
   return (
     <div className="space-y-5">
-      <Section title="Email notifications" description="Choose which emails you want to receive.">
-        <ToggleRow label="New job matches" description="Get notified when new jobs match your profile" value={prefs.jobMatches} onChange={() => toggle('jobMatches')} />
+      <Section title="Email notifications" description="Choose which emails you want to receive. Requires SMTP in server/.env.">
+        <ToggleRow label="New job matches" description="Receive an email with your top matched jobs when enabled and SMTP is configured" value={prefs.jobMatches} onChange={() => toggle('jobMatches')} />
         <ToggleRow label="Weekly digest" description="A summary of your top matches every Monday" value={prefs.weeklyDigest} onChange={() => toggle('weeklyDigest')} />
         <ToggleRow label="Skill gap alerts" description="When new learning resources match your gaps" value={prefs.skillUpdates} onChange={() => toggle('skillUpdates')} />
         <ToggleRow label="Application updates" description="Status changes on jobs you've applied to" value={prefs.appStatus} onChange={() => toggle('appStatus')} />
@@ -209,7 +209,22 @@ function NotificationsTab() {
         <ToggleRow label="Enable browser notifications" description="Requires permission from your browser" value={prefs.browser} onChange={() => toggle('browser')} />
       </Section>
 
-      <div className="flex justify-end">
+      <div className="flex flex-wrap justify-end gap-3">
+        <button
+          type="button"
+          onClick={async () => {
+            try {
+              const { data } = await axios.post('/api/auth/settings/notification-test')
+              toast(data.message || 'Test email sent', 'success')
+            } catch (err) {
+              toast(err.response?.data?.message || 'Failed to send test', 'error')
+            }
+          }}
+          disabled={!prefs.jobMatches}
+          className="px-5 py-2.5 rounded-xl text-sm font-medium border border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-300 disabled:opacity-50"
+        >
+          Send sample match email
+        </button>
         <button onClick={save} disabled={saving} className="btn-primary flex items-center gap-2 px-5">
           {saving ? <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <Check size={15} />}
           Save preferences

@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import axios from "axios";
-import { useToast } from '../components/ui/Toast'
-import { dedupeJobs } from '../utils/dedupeJobs'
+import { useToast } from "../components/ui/Toast";
+import { dedupeJobs } from "../utils/dedupeJobs";
 
 const DEFAULT_FILTERS = {
   search: "",
@@ -11,13 +11,26 @@ const DEFAULT_FILTERS = {
   remote: false,
   salaryMin: "",
   salaryMax: "",
-  sort: "match", // 'match' | 'salary' | 'recent'
+  sort: "match",
   page: 1,
 };
 
+function buildParams(f) {
+  const params = new URLSearchParams();
+  if (f.search) params.set("search", f.search);
+  if (f.location) params.set("location", f.location);
+  if (f.type) params.set("type", f.type);
+  if (f.level) params.set("level", f.level);
+  if (f.remote) params.set("remote", "true");
+  if (f.salaryMin) params.set("salaryMin", f.salaryMin);
+  if (f.salaryMax) params.set("salaryMax", f.salaryMax);
+  params.set("page", String(f.page));
+  params.set("limit", "12");
+  return params;
+}
+
 export function useJobs() {
   const [jobs, setJobs] = useState([]);
-  const [aiScores, setAiScores] = useState({}); // jobId → {match_score, component_scores, matched_skills, missing_skills}
   const [filters, setFilters] = useState(DEFAULT_FILTERS);
   const [loading, setLoading] = useState(true);
   const [aiLoading, setAiLoading] = useState(false);
@@ -25,91 +38,71 @@ export function useJobs() {
   const [total, setTotal] = useState(0);
   const [pages, setPages] = useState(1);
 
-  // Debounce search — wait 400ms after last keystroke before fetching
   const searchTimer = useRef(null);
-
   const toast = useToast();
 
-  // ── Fetch jobs from Express backend ────────────────────────────────────────
-  const fetchJobs = useCallback(
-    async (f = filters) => {
-      setLoading(true);
-      setError(null);
-      try {
-        const params = new URLSearchParams();
-        if (f.search) params.set("search", f.search);
-        if (f.location) params.set("location", f.location);
-        if (f.type) params.set("type", f.type);
-        if (f.level) params.set("level", f.level);
-        if (f.remote) params.set("remote", "true");
-        if (f.salaryMin) params.set("salaryMin", f.salaryMin);
-        if (f.salaryMax) params.set("salaryMax", f.salaryMax);
-        params.set("page", f.page);
-        params.set("limit", "12");
-        // Sort by salary for that option, otherwise by date (AI score sorts client-side)
-        if (f.sort === "salary") params.set("sort", "-salaryMax");
-        else if (f.sort === "recent") params.set("sort", "-postedAt");
+  const fetchJobs = useCallback(async (f = filters) => {
+    setLoading(true);
+    setError(null);
 
-        const { data } = await axios.get(`/api/jobs?${params}`);
-        setJobs(dedupeJobs(data.jobs || []));
-        setTotal(data.total || 0);
-        setPages(data.pages || 1);
-      } catch (err) {
-        setError(err.response?.data?.message || "Failed to load jobs.");
-        toast(err.response?.data?.message || 'Failed to load jobs.', 'error')
-      } finally {
-        setLoading(false);
-      }
-    },
-    [filters],
-  );
+    const isMatchSort = f.sort === "match";
 
-  // ── Fetch AI match scores from Flask via Express ────────────────────────────
-  const fetchAiScores = useCallback(async () => {
-    setAiLoading(true);
     try {
-      const { data } = await axios.get("/api/jobs/match");
-      // Build a lookup map: jobId → score data
-      const scoreMap = {};
-      for (const match of data.matches || []) {
-        scoreMap[match.job_id] = {
-          matchScore: match.match_score,
-          componentScores: match.component_scores,
-          matchedSkills: match.matched_skills,
-          missingSkills: match.missing_skills,
-        };
+      const params = buildParams(f);
+
+      if (isMatchSort) {
+        setAiLoading(true);
+        const { data } = await axios.get(`/api/jobs/match?${params}`);
+        const scored = (data.matches || []).map((m) => ({
+          _id: m.job_id,
+          title: m.title,
+          company: m.company,
+          location: m.location,
+          salary: m.salary,
+          type: m.type,
+          remote: m.remote,
+          level: m.level,
+          industry: m.industry,
+          applyUrl: m.applyUrl,
+          skills: m.skills,
+          matchScore: m.match_score,
+          matchedSkills: m.matched_skills,
+          missingSkills: m.missing_skills,
+          componentScores: m.component_scores,
+        }));
+        setJobs(dedupeJobs(scored));
+        setTotal(data.total ?? scored.length);
+        setPages(data.pages ?? 1);
+        setAiLoading(false);
+        return;
       }
-      setAiScores(scoreMap);
+
+      if (f.sort === "salary") params.set("sort", "-salaryMax");
+      else if (f.sort === "recent") params.set("sort", "-postedAt");
+
+      const { data } = await axios.get(`/api/jobs?${params}`);
+      setJobs(
+        dedupeJobs(
+          (data.jobs || []).map((j) => ({ ...j, matchScore: j.matchScore ?? null })),
+        ),
+      );
+      setTotal(data.total || 0);
+      setPages(data.pages || 1);
     } catch (err) {
-      // AI scores are non-critical — silently fail and show jobs without scores
-      console.warn("AI scores unavailable:", err.message);
+      setError(err.response?.data?.message || "Failed to load jobs.");
+      toast(err.response?.data?.message || "Failed to load jobs.", "error");
     } finally {
+      setLoading(false);
       setAiLoading(false);
     }
-  }, []);
+  }, [filters, toast]);
 
-  // ── Merge AI scores into job objects ────────────────────────────────────────
-  const jobsWithScores = jobs.map((job) => ({
-    ...job,
-    ...(aiScores[job._id] || { matchScore: null }),
-  }));
-
-  // Sort client-side by match score if that's the selected sort
-  const sortedJobs =
-    filters.sort === "match"
-      ? [...jobsWithScores].sort(
-          (a, b) => (b.matchScore ?? 0) - (a.matchScore ?? 0),
-        )
-      : jobsWithScores;
-
-  // ── Filter change handler — debounces search field ─────────────────────────
   const updateFilter = useCallback(
     (key, value) => {
       setFilters((prev) => {
         const next = { ...prev, [key]: value, page: 1 };
 
         if (key === "search") {
-          // Debounce search to avoid a fetch on every keystroke
           clearTimeout(searchTimer.current);
           searchTimer.current = setTimeout(() => fetchJobs(next), 400);
           return next;
@@ -133,14 +126,13 @@ export function useJobs() {
     fetchJobs(next);
   };
 
-  // ── Initial load ────────────────────────────────────────────────────────────
   useEffect(() => {
     fetchJobs();
-    fetchAiScores();
+    return () => clearTimeout(searchTimer.current);
   }, []);
 
   return {
-    jobs: sortedJobs,
+    jobs,
     filters,
     updateFilter,
     resetFilters,
@@ -150,6 +142,6 @@ export function useJobs() {
     total,
     pages,
     goToPage,
-    refetchScores: fetchAiScores,
+    refetch: () => fetchJobs(filters),
   };
 }

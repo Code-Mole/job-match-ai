@@ -4,7 +4,6 @@ import { CAREER_ROLES, formatSalary } from "../../data/careersData";
 import TrendBadge from "./TrendBadge";
 import SalaryBar from "./SalaryBar";
 
-const GLOBAL_MAX = Math.max(...CAREER_ROLES.map((r) => r.salaryMax));
 const CHART_HEIGHT = 140; // px
 
 // Simple bar chart built with divs — no charting library needed
@@ -270,15 +269,39 @@ function RoleDetail({ role }) {
   );
 }
 
-export default function MarketInsights() {
-  const [selectedId, setSelectedId] = useState("frontend");
-  const selectedRole = CAREER_ROLES.find((r) => r.id === selectedId);
+export default function MarketInsights({ roles = CAREER_ROLES, marketSummary }) {
+  const list = roles.length ? roles : CAREER_ROLES;
+  const [selectedId, setSelectedId] = useState(list[0]?.id || "frontend");
+  const selectedRole = list.find((r) => r.id === selectedId) || list[0];
 
   return (
     <div className="space-y-6">
+      {marketSummary && (
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="rounded-2xl p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800/50">
+            <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">Avg salary (your matches)</p>
+            <p className="text-xl font-bold text-slate-900 dark:text-slate-100">
+              ${(marketSummary.avgSalary / 1000).toFixed(0)}k
+            </p>
+          </div>
+          <div className="rounded-2xl p-4 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800/50">
+            <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">Top industries</p>
+            <p className="text-sm font-semibold text-slate-900 dark:text-slate-100 truncate">
+              {(marketSummary.topIndustries || []).join(", ") || "—"}
+            </p>
+          </div>
+          <div className="rounded-2xl p-4 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800/50">
+            <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">Matched roles</p>
+            <p className="text-xl font-bold text-slate-900 dark:text-slate-100">
+              {marketSummary.matchCount ?? list.length}
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Salary chart */}
       <SalaryChart
-        roles={CAREER_ROLES}
+        roles={list}
         selectedId={selectedId}
         onSelect={setSelectedId}
       />
@@ -291,7 +314,7 @@ export default function MarketInsights() {
             Roles overview
           </h3>
           <div className="space-y-2 max-h-[600px] overflow-y-auto pr-1">
-            {CAREER_ROLES.map((role) => (
+            {list.map((role) => (
               <RoleMarketCard
                 key={role.id}
                 role={role}

@@ -289,9 +289,9 @@ router.get('/stats', protect, async (req, res, next) => {
 
     if (user.skills?.length || user.cvText) {
       try {
-        const jobs = await loadFilteredJobs({}, 150);
+        const jobs = await loadFilteredJobs({}, 60);
         if (jobs.length) {
-          const aiMatches = await scoreJobsForUser(user, jobs, jobs.length);
+          const aiMatches = await scoreJobsForUser(user, jobs, 20);
           const scores = aiMatches
             .map((m) => m.match_score)
             .filter((s) => typeof s === "number" && s > 0);
@@ -336,10 +336,20 @@ router.get('/stats', protect, async (req, res, next) => {
   } catch (err) { next(err) }
 })
 
+const careerInsightsCache = new Map();
+const CAREER_CACHE_MS = 2 * 60 * 1000;
+
 // ── GET /api/auth/career-insights — dynamic careers data from CV + matches ───
 router.get("/career-insights", protect, async (req, res, next) => {
   try {
+    const key = String(req.user._id);
+    const cached = careerInsightsCache.get(key);
+    if (cached && Date.now() - cached.at < CAREER_CACHE_MS) {
+      return res.json({ success: true, ...cached.data, cached: true });
+    }
+
     const insights = await buildCareerInsights(req.user);
+    careerInsightsCache.set(key, { data: insights, at: Date.now() });
     res.json({ success: true, ...insights });
   } catch (err) {
     next(err);

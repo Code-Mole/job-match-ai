@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react'
 import { Upload, FileText, CheckCircle, AlertCircle, X, Loader2 } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
+import { invalidateCache } from '../../utils/apiCache'
 import { useToast } from '../ui/Toast'
 import axios from 'axios'
 
@@ -80,7 +81,9 @@ export default function CVUpload({ onUpload }) {
         'success'
       )
 
-      // Pass data up to parent (DashboardPage) to inject match cards
+      invalidateCache('/api/jobs/match')
+      invalidateCache('/api/auth/career-insights')
+      invalidateCache('/api/auth/stats')
       onUpload?.(f, data)
 
     } catch (err) {

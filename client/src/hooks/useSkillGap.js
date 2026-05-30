@@ -1,48 +1,49 @@
 import { useState, useEffect, useCallback } from "react";
 import axios from "axios";
 import { useAuth } from "../context/AuthContext";
-import { useToast } from '../components/ui/Toast'
+import { useToast } from "../components/ui/Toast";
 
-export function useSkillGap(jobId = null, jobData = null) {
+export function useSkillGap(jobId = null) {
   const { user } = useAuth();
   const [gap, setGap] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-
   const toast = useToast();
 
   const fetchGap = useCallback(
-    async (jId, jData) => {
-      if (!jId && !jData) return;
+    async (id) => {
+      if (!id) {
+        setGap(null);
+        return;
+      }
       setLoading(true);
       setError(null);
       try {
         const { data } = await axios.post("/api/ai/skill-gap", {
           user_skills: user?.skills || [],
-          job_id: jId || undefined,
-          job: jData || undefined,
+          job_id: id,
         });
         setGap(data);
       } catch (err) {
-        setError(
-          err.response?.data?.message || "Failed to load skill gap analysis.",
-        );
-        toast('Skill gap analysis unavailable — showing cached data.', 'info');
+        const msg =
+          err.response?.data?.message || "Failed to load skill gap analysis.";
+        setError(msg);
+        setGap(null);
+        toast(msg, "error");
       } finally {
         setLoading(false);
       }
     },
-    [user?.skills],
+    [user?.skills, toast],
   );
 
   useEffect(() => {
-    fetchGap(jobId, jobData);
-  }, [jobId, jobData, fetchGap]);
+    fetchGap(jobId);
+  }, [jobId, fetchGap]);
 
-  return { gap, loading, error, refetch: () => fetchGap(jobId, jobData) };
+  return { gap, loading, error, refetch: () => fetchGap(jobId) };
 }
 
-// Hook for getting the full skill profile of the logged-in user
 export function useUserSkills() {
   const { user, updateProfile } = useAuth();
   const [saving, setSaving] = useState(false);

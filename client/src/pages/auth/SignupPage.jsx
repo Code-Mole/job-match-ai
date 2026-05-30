@@ -128,22 +128,23 @@ export default function SignupPage() {
   return (
     <div
       className="
-      min-h-screen flex items-center justify-center p-4
+      relative min-h-[100dvh] w-full overflow-x-hidden overflow-y-auto
+      flex items-center justify-center p-4 py-8
       bg-gradient-to-br from-blue-100 via-indigo-50 to-emerald-50
       dark:from-slate-900 dark:via-indigo-950 dark:to-slate-900
       transition-colors duration-300
     "
     >
-      <div className="absolute top-0 left-0 w-96 h-96 bg-blue-300/30 dark:bg-blue-600/20 rounded-full blur-3xl -translate-x-1/2 -translate-y-1/2 pointer-events-none" />
-      <div className="absolute bottom-0 right-0 w-80 h-80 bg-indigo-300/30 dark:bg-indigo-600/20 rounded-full blur-3xl translate-x-1/3 translate-y-1/3 pointer-events-none" />
+      <div className="absolute top-0 left-0 w-48 h-48 sm:w-72 sm:h-72 md:w-96 md:h-96 bg-blue-300/30 dark:bg-blue-600/20 rounded-full blur-3xl -translate-x-1/2 -translate-y-1/2 pointer-events-none max-w-[100vw]" />
+      <div className="absolute bottom-0 right-0 w-40 h-40 sm:w-64 sm:h-64 md:w-80 md:h-80 bg-indigo-300/30 dark:bg-indigo-600/20 rounded-full blur-3xl translate-x-1/4 translate-y-1/4 pointer-events-none max-w-[100vw]" />
 
-      <div className="absolute top-4 right-4">
+      <div className="absolute top-4 right-4 z-10">
         <ThemeToggle />
       </div>
 
       <div
         className="
-        relative w-full max-w-md rounded-2xl p-8
+        relative z-[1] w-full max-w-md rounded-2xl p-6 sm:p-8 my-auto
         bg-white/75 backdrop-blur-2xl
         border border-white/90 shadow-xl shadow-blue-500/10
         dark:bg-slate-800/60 dark:border-white/10 dark:shadow-slate-900/50

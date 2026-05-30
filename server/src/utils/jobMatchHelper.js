@@ -23,14 +23,17 @@ export function buildJobFilter(query = {}) {
   return filter;
 }
 
+const JOB_POOL_CAP = 80;
+
 export async function scoreJobsForUser(user, jobs, topN) {
   if (!jobs.length) return [];
   if (!user.skills?.length && !user.cvText) return [];
 
-  const limit = topN ?? Math.min(jobs.length, 100);
+  const pool = jobs.slice(0, JOB_POOL_CAP);
+  const limit = Math.min(topN ?? 25, pool.length);
 
   try {
-    await axios.post(`${AI_URL()}/load-jobs`, { jobs }, { timeout: 120000 });
+    await axios.post(`${AI_URL()}/load-jobs`, { jobs: pool }, { timeout: 25000 });
   } catch {
     /* non-fatal */
   }
@@ -45,13 +48,13 @@ export async function scoreJobsForUser(user, jobs, topN) {
       cv_roles: user.cvRoles || [],
       top_n: limit,
     },
-    { timeout: 120000 },
+    { timeout: 30000 },
   );
 
   return data.matches || [];
 }
 
-export async function loadFilteredJobs(query, max = 200) {
+export async function loadFilteredJobs(query, max = 80) {
   const filter = buildJobFilter(query);
   return Job.find(filter).sort({ postedAt: -1 }).limit(max).lean();
 }

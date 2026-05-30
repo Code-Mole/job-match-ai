@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import axios from 'axios'
 import { useToast } from '../components/ui/Toast'
 import { dedupeJobs } from '../utils/dedupeJobs'
+import { cachedGet, invalidateCache } from '../utils/apiCache'
 
 export function useDashboard() {
   const toast = useToast()
@@ -27,9 +28,11 @@ export function useDashboard() {
       // Try to get AI-scored matches first
       let matched = []
       try {
-        const { data } = await axios.get('/api/jobs/match', {
-          signal: abortRef.current.signal,
-        })
+        const data = await cachedGet(
+          '/api/jobs/match?limit=8&top_n=8',
+          90_000,
+          () => axios.get('/api/jobs/match?limit=8&top_n=8', { signal: abortRef.current.signal }),
+        )
         matched = (data.matches || []).map(m => ({
           _id:           m.job_id,
           title:         m.title,
@@ -76,7 +79,8 @@ export function useDashboard() {
   // Accepts the top_matches array returned by /api/cv/parse
   const injectCvMatches = useCallback((topMatches) => {
     if (!topMatches?.length) return
-    // topMatches already has matchScore etc. merged — use directly
+    invalidateCache('/api/jobs/match')
+    invalidateCache('/api/auth/career-insights')
     setJobs(dedupeJobs(topMatches).sort((a, b) => (b.matchScore ?? 0) - (a.matchScore ?? 0)))
   }, [])
 

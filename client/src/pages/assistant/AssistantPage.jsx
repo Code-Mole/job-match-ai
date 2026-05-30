@@ -1,6 +1,5 @@
 import { useState, useRef, useEffect } from "react";
 import { Send, Trash2, Sparkles, MessageSquare } from "lucide-react";
-import AppLayout from "../../components/layouts/AppLayout";
 import MessageBubble from "../../components/assistant/MessageBubble";
 import TypingIndicator from "../../components/assistant/TypingIndicator";
 import PromptChip from "../../components/assistant/PromptChip";
@@ -32,8 +31,7 @@ export default function AssistantPage() {
   };
 
   return (
-    <AppLayout showFooter={false}>
-      <div className="flex flex-col h-full max-w-4xl mx-auto px-3 sm:px-4 py-4 sm:py-6 min-h-0">
+      <div className="flex flex-col min-h-[calc(100dvh-5rem)] max-w-4xl mx-auto px-3 sm:px-4 py-4 sm:py-6">
         {/* ── Page header ──────────────────────────── */}
         <div className="flex flex-col gap-4 mb-6 sm:flex-row sm:items-start sm:justify-between sm:gap-4 flex-shrink-0 px-1">
           <div className="flex items-start gap-3 sm:gap-4 min-w-0">
@@ -161,6 +159,5 @@ export default function AssistantPage() {
           </div>
         </div>
       </div>
-    </AppLayout>
   );
 }

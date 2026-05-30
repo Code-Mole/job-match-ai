@@ -81,12 +81,12 @@ function buildPathsFromRoles(roles, user) {
 }
 
 export async function buildCareerInsights(user) {
-  const jobs = await loadFilteredJobs({}, 120);
+  const jobs = await loadFilteredJobs({}, 60);
   let matches = [];
 
   if (user.skills?.length || user.cvText) {
     try {
-      matches = await scoreJobsForUser(user, jobs, 40);
+      matches = await scoreJobsForUser(user, jobs, 12);
     } catch {
       matches = [];
     }

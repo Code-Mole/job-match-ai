@@ -1,22 +1,30 @@
 import { useState, useEffect, useCallback } from "react";
-import axios from "axios";
 import { useAuth } from "../context/AuthContext";
 import { dedupeJobs } from "../utils/dedupeJobs";
+import { cachedGet } from "../utils/apiCache";
 
 /**
- * Top AI-matched jobs from the database for the logged-in user.
+ * Top AI-matched jobs — uses fast match endpoint with limited pool.
  */
-export function useMatchedJobs(limit = 15) {
+export function useMatchedJobs(limit = 12) {
   const { user } = useAuth();
   const [jobs, setJobs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   const fetchMatched = useCallback(async () => {
+    if (!user) {
+      setJobs([]);
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
     setError(null);
     try {
-      const { data } = await axios.get("/api/jobs/match");
+      const url = `/api/jobs/match?limit=${limit}&top_n=${limit}`;
+      const data = await cachedGet(url, 90_000);
+
       const list = dedupeJobs(
         (data.matches || []).map((m) => ({
           _id: m.job_id,
@@ -24,10 +32,9 @@ export function useMatchedJobs(limit = 15) {
           company: m.company,
           location: m.location,
           salary: m.salary,
-          skills: [
-            ...(m.matched_skills || []),
-            ...(m.missing_skills || []),
-          ],
+          skills: m.skills?.length
+            ? m.skills
+            : [...(m.matched_skills || []), ...(m.missing_skills || [])],
           match_score: m.match_score,
           matchScore: m.match_score,
           matched_skills: m.matched_skills,
@@ -46,7 +53,7 @@ export function useMatchedJobs(limit = 15) {
     } finally {
       setLoading(false);
     }
-  }, [limit, user?.skills?.length]);
+  }, [limit, user?._id]);
 
   useEffect(() => {
     fetchMatched();

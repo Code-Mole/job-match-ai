@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Sparkles, ArrowRight, RefreshCw } from 'lucide-react'
-import AppLayout from '../../components/layouts/AppLayout'
 import CVUpload from '../../components/dashboard/CVUpload'
 import StatsBar from '../../components/dashboard/StatsBar'
 import JobCard from '../../components/jobs/JobCard'
@@ -39,7 +38,6 @@ export default function DashboardPage() {
   )
 
   return (
-    <AppLayout onSearch={setSearch}>
       <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6">
         <StatsBar stats={stats} />
 
@@ -136,6 +134,5 @@ export default function DashboardPage() {
           </div>
         </div>
       </div>
-    </AppLayout>
   )
 }

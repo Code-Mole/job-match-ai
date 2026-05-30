@@ -7,7 +7,6 @@ import {
   AlertCircle,
   ChevronDown,
 } from "lucide-react";
-import AppLayout from "../../components/layouts/AppLayout";
 import CircularProgress from "../../components/skills/CircularProgress";
 import SkillBar from "../../components/skills/SkillBar";
 import CourseCard from "../../components/skills/CourseCard";
@@ -94,10 +93,7 @@ function GapAnalysisTab() {
     if (selectedJob?._id && !selectedJobId) setSelectedJobId(String(selectedJob._id));
   }, [selectedJob, selectedJobId]);
 
-  const { gap, loading, error, refetch } = useSkillGap(
-    selectedJob?._id,
-    selectedJob,
-  );
+  const { gap, loading, error, refetch } = useSkillGap(selectedJobId || selectedJob?._id);
 
   // Build skill rows combining gap data with proficiency placeholders
   const matchedSkills = (gap?.matched_skills || []).map((skill) => ({
@@ -369,7 +365,7 @@ function LearningPathTab() {
     if (selectedJob?._id && !selectedJobId) setSelectedJobId(String(selectedJob._id));
   }, [selectedJob, selectedJobId]);
 
-  const { gap, loading } = useSkillGap(selectedJob?._id, selectedJob);
+  const { gap, loading } = useSkillGap(selectedJobId || selectedJob?._id);
 
   const learningPath = gap?.learning_path || [];
 
@@ -533,7 +529,6 @@ export default function SkillsPage() {
   const skillCount = user?.skills?.length || 0;
 
   return (
-    <AppLayout>
       <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
         {/* ── Page header ──────────────────────────── */}
         <div className="flex items-start gap-4 mb-8">
@@ -579,6 +574,5 @@ export default function SkillsPage() {
         {activeTab === "skills" && <MySkillsTab />}
         {activeTab === "learning" && <LearningPathTab />}
       </div>
-    </AppLayout>
   );
 }

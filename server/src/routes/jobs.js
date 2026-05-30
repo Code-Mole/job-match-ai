@@ -85,7 +85,9 @@ function mergeMatchResults(jobs, aiMatches) {
         level: job.level,
         industry: job.industry,
         applyUrl: job.applyUrl,
-        skills: job.skills,
+        skills: job.skills || [],
+        description: job.description,
+        requirements: job.requirements,
         match_score: m.match_score,
         matched_skills: m.matched_skills,
         missing_skills: m.missing_skills,
@@ -165,8 +167,10 @@ router.get('/match', protect, async (req, res, next) => {
       });
     }
 
-    const jobs = await loadFilteredJobs(req.query, 200);
-    const aiMatches = await scoreJobsForUser(user, jobs, jobs.length);
+    const topN = Math.min(50, Math.max(1, Number(req.query.top_n) || Number(limitNum) || 25));
+    const poolSize = Math.min(80, topN * 5);
+    const jobs = await loadFilteredJobs(req.query, poolSize);
+    const aiMatches = await scoreJobsForUser(user, jobs, topN);
     const allMatches = mergeMatchResults(jobs, aiMatches);
 
     const total = allMatches.length;

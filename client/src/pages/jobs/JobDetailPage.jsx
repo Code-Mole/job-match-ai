@@ -17,7 +17,6 @@ import {
   Users,
   Star,
 } from "lucide-react";
-import AppLayout from "../../components/layouts/AppLayout";
 import { Skeleton } from "../../components/ui/LoadingSkeleton";
 import { useJob } from "../../hooks/useJob";
 import { useAuth } from "../../context/AuthContext";
@@ -193,17 +192,11 @@ export default function JobDetailPage() {
   }
 }
 
-  if (loading)
-    return (
-      <AppLayout>
-        <JobDetailSkeleton />
-      </AppLayout>
-    );
+  if (loading) return <JobDetailSkeleton />;
 
   if (error || !job) {
     return (
-      <AppLayout>
-        <div className="flex flex-col items-center justify-center h-full py-20 gap-4">
+        <div className="flex flex-col items-center justify-center min-h-[50vh] py-20 gap-4 px-4">
           <XCircle size={40} className="text-red-400" />
           <p className="text-slate-600 dark:text-slate-400">
             {error || "Job not found."}
@@ -215,7 +208,6 @@ export default function JobDetailPage() {
             Back to Jobs
           </button>
         </div>
-      </AppLayout>
     );
   }
 
@@ -240,8 +232,7 @@ export default function JobDetailPage() {
   const logoColor = logoColors[Math.abs(hash) % logoColors.length];
 
   return (
-    <AppLayout>
-      <div className="max-w-5xl mx-auto px-6 py-8">
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
         {/* ── Back button ─────────────────────────────────────── */}
         <button
           onClick={() => navigate(-1)}
@@ -659,6 +650,5 @@ export default function JobDetailPage() {
           </div>
         </div>
       </div>
-    </AppLayout>
   );
 }

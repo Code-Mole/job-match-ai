@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, useCallback } from 'react'
 import axios from 'axios'
+import { invalidateCache } from '../utils/apiCache'
 
 const AuthContext = createContext(null)
 
@@ -60,7 +61,11 @@ export function AuthProvider({ children }) {
 
   const updateProfile = async (updates) => {
     const { data } = await axios.put('/api/auth/profile', updates)
-    setUser(data.user)   // always sync local state
+    setUser(data.user)
+    if (updates.skills) {
+      invalidateCache('/api/jobs/match')
+      invalidateCache('/api/auth/career-insights')
+    }
     return data
   }
 

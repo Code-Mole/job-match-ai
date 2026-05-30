@@ -1,8 +1,10 @@
 import { useState, useEffect, useCallback } from "react";
-import axios from "axios";
+import { useAuth } from "../context/AuthContext";
 import { CAREER_ROLES } from "../data/careersData";
+import { cachedGet } from "../utils/apiCache";
 
 export function useCareerInsights() {
+  const { user } = useAuth();
   const [roles, setRoles] = useState(CAREER_ROLES);
   const [careerPaths, setCareerPaths] = useState([]);
   const [marketSummary, setMarketSummary] = useState(null);
@@ -11,10 +13,11 @@ export function useCareerInsights() {
   const [error, setError] = useState(null);
 
   const fetchInsights = useCallback(async () => {
+    if (!user) return;
     setLoading(true);
     setError(null);
     try {
-      const { data } = await axios.get("/api/auth/career-insights");
+      const data = await cachedGet("/api/auth/career-insights", 120_000);
       if (data.roles?.length) setRoles(data.roles);
       if (data.careerPaths?.length) setCareerPaths(data.careerPaths);
       setMarketSummary(data.marketSummary || null);
@@ -25,7 +28,7 @@ export function useCareerInsights() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [user?._id]);
 
   useEffect(() => {
     fetchInsights();

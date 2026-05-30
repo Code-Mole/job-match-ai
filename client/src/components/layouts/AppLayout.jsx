@@ -32,10 +32,12 @@ export default function AppLayout({ children, onSearch, showFooter = true }) {
           onOpenMenu={() => setMobileNavOpen(true)}
         />
 
-        {/* Page content scrolls independently of sidebar */}
-        <main className="flex-1 overflow-y-auto min-h-0 flex flex-col">
-          <div className="flex-1 min-h-0">{children}</div>
-          {showFooter && <Footer />}
+        {/* Page content scrolls; footer flows after content (no mid-viewport hang) */}
+        <main className="flex-1 overflow-y-auto min-h-0">
+          <div className="min-h-full flex flex-col">
+            <div className="flex-1">{children}</div>
+            {showFooter && <Footer />}
+          </div>
         </main>
       </div>
     </div>

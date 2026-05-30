@@ -1,5 +1,4 @@
 import { AlertCircle, Briefcase, RefreshCw } from "lucide-react";
-import AppLayout from "../../components/layouts/AppLayout";
 import FilterBar from "../../components/jobs/FilterBar";
 import JobCard from "../../components/jobs/JobCard";
 import { JobCardSkeleton } from "../../components/ui/LoadingSkeleton";
@@ -125,6 +124,7 @@ export default function JobsPage() {
     total,
     pages,
     goToPage,
+    refetch,
   } = useJobs();
 
   const hasFilters = !!(
@@ -137,24 +137,21 @@ export default function JobsPage() {
 
   if (error) {
     return (
-      <AppLayout>
-        <div className="flex flex-col items-center justify-center h-full py-20 gap-4">
+        <div className="flex flex-col items-center justify-center min-h-[50vh] py-20 gap-4 px-4">
           <AlertCircle size={40} className="text-red-400" />
           <p className="text-slate-600 dark:text-slate-400">{error}</p>
           <button
-            onClick={() => window.location.reload()}
+            onClick={refetch}
             className="btn-primary px-6"
           >
             Retry
           </button>
         </div>
-      </AppLayout>
     );
   }
 
   return (
-    <AppLayout>
-      <div className="flex flex-col h-full">
+      <div>
         {/* ── Filter bar (sticky) ────────────────────────────── */}
         <FilterBar
           filters={filters}
@@ -163,9 +160,7 @@ export default function JobsPage() {
           total={total}
         />
 
-        {/* ── Page content ──────────────────────────────────── */}
-        <div className="flex-1 overflow-y-auto">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
             {/* AI score loading banner */}
             {aiLoading && (
               <div className="flex items-center gap-2 mb-5 px-4 py-2.5 rounded-xl bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800/50 text-sm text-blue-700 dark:text-blue-300">
@@ -198,9 +193,7 @@ export default function JobsPage() {
                 />
               </>
             )}
-          </div>
         </div>
       </div>
-    </AppLayout>
   );
 }

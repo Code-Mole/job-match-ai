@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react"
 import { User, Bell, Shield, Trash2, Save, Eye, EyeOff, Check, Mail } from 'lucide-react'
-import AppLayout from '../../components/layouts/AppLayout'
 import { useAuth } from '../../context/AuthContext'
 import { useToast } from '../../components/ui/Toast'
 import axios from 'axios'
@@ -421,8 +420,7 @@ export default function SettingsPage() {
   }, [])
 
   return (
-    <AppLayout>
-      <div className="max-w-4xl mx-auto px-6 py-8">
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
         <h1 className="font-display font-bold text-3xl text-slate-900 dark:text-slate-50 mb-8">Settings</h1>
         <div className="grid grid-cols-1 lg:grid-cols-[200px_1fr] gap-6">
 
@@ -458,6 +456,5 @@ export default function SettingsPage() {
           </div>
         </div>
       </div>
-    </AppLayout>
   )
 }

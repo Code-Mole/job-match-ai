@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { Briefcase, Star, ArrowLeft } from "lucide-react";
 import axios from "axios";
-import AppLayout from "../../components/layouts/AppLayout";
 import JobCard from "../../components/jobs/JobCard";
 import { JobCardSkeleton } from "../../components/ui/LoadingSkeleton";
 
@@ -46,8 +45,7 @@ export default function MyJobsPage({ variant = "applied" }) {
   }, [endpoint]);
 
   return (
-    <AppLayout>
-      <div className="max-w-6xl mx-auto px-6 py-8">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
         <Link
           to="/jobs"
           className="inline-flex items-center gap-2 text-sm text-slate-500 hover:text-blue-600 dark:text-slate-400 dark:hover:text-blue-400 mb-6"
@@ -104,6 +102,5 @@ export default function MyJobsPage({ variant = "applied" }) {
           </div>
         )}
       </div>
-    </AppLayout>
   );
 }

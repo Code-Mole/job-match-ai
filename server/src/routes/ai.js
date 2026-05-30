@@ -1,6 +1,7 @@
 import express from "express";
 import axios from "axios";
 import Anthropic from "@anthropic-ai/sdk";
+import Job from "../models/Job.js";
 import { protect } from "../middleware/auth.js";
 import Feedback from "../models/Feedback.js";
 
@@ -404,21 +405,58 @@ router.post("/chat", protect, async (req, res, next) => {
   }
 });
 
+function jobPayloadForAi(job) {
+  if (!job) return null;
+  return {
+    _id: String(job._id),
+    title: job.title || "",
+    description: job.description || "",
+    skills: job.skills || [],
+    requirements: job.requirements || [],
+    responsibilities: job.responsibilities || [],
+    level: job.level || "",
+    yearsExp: job.yearsExp ?? 0,
+    industry: job.industry || "",
+  };
+}
+
 // ── POST /api/ai/skill-gap ────────────────────────────────────────────────────
 router.post("/skill-gap", protect, async (req, res, next) => {
   try {
+    let job = req.body.job;
+    const jobId = req.body.job_id || job?._id;
+
+    if (jobId) {
+      const dbJob = await Job.findById(jobId).lean();
+      if (dbJob) {
+        job = { ...jobPayloadForAi(dbJob), ...(job || {}) };
+      }
+    }
+
+    if (!job?.title && !job?.skills?.length) {
+      return res.status(400).json({
+        message: "Job not found or missing job details for gap analysis.",
+      });
+    }
+
     const { data } = await axios.post(
       `${AI_URL}/skill-gap`,
       {
-        user_skills: req.user.skills || [],
-        ...req.body,
+        user_skills: req.body.user_skills || req.user.skills || [],
+        job_id: jobId ? String(jobId) : undefined,
+        job: jobPayloadForAi(job),
       },
-      { timeout: 12000 },
+      { timeout: 20000 },
     );
     res.json(data);
   } catch (err) {
     if (err.code === "ECONNREFUSED") {
       return res.status(503).json({ message: "AI service unavailable." });
+    }
+    if (err.response?.data?.error) {
+      return res.status(err.response.status || 502).json({
+        message: err.response.data.error,
+      });
     }
     next(err);
   }

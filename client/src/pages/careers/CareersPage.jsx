@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { TrendingUp, BarChart3, Map, Compass, RefreshCw } from "lucide-react";
-import AppLayout from "../../components/layouts/AppLayout";
 import RoleCompare from "../../components/careers/RoleCompare";
 import MarketInsights from "../../components/careers/MarketInsights";
 import CareerPath from "../../components/careers/CareerPath";
@@ -29,11 +28,10 @@ const TABS = [
 
 export default function CareersPage() {
   const [activeTab, setActiveTab] = useState("compare");
-  const { roles, careerPaths, marketSummary, personalized, loading, refetch } =
+  const { roles, careerPaths, marketSummary, personalized, loading, error, refetch } =
     useCareerInsights();
 
   return (
-    <AppLayout>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
         {/* ── Page header ──────────────────────────────── */}
         <div className="flex items-start gap-4 mb-8">
@@ -88,6 +86,12 @@ export default function CareersPage() {
           ))}
         </div>
 
+        {error && (
+          <div className="mb-4 p-3 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700/50 text-sm text-amber-800 dark:text-amber-300">
+            {error} Showing available market data.
+          </div>
+        )}
+
         {/* ── Tab description ──────────────────────────── */}
         <p className="text-sm text-slate-500 dark:text-slate-400 mb-6">
           {TABS.find((t) => t.id === activeTab)?.desc}
@@ -108,6 +112,5 @@ export default function CareersPage() {
           </>
         )}
       </div>
-    </AppLayout>
   );
 }

@@ -5,6 +5,7 @@ and generates a personalised learning path.
 """
 
 from .skill_ontology import normalize_skills_list
+from .job_skill_extractor import extract_skills_from_job
 
 
 # Learning resources for common skills
@@ -93,7 +94,8 @@ def analyse_skill_gap(user_skills: list, job: dict) -> dict:
         }
     """
     user_norm = set(normalize_skills_list(user_skills))
-    job_norm  = set(normalize_skills_list(job.get("skills", [])))
+    job_skills = job.get("skills") or extract_skills_from_job(job)
+    job_norm = set(normalize_skills_list(job_skills))
 
     if not job_norm:
         return {

@@ -10,6 +10,8 @@ SKILL_DOMAINS = {
         "postgresql", "mongodb", "redis", "graphql", "machine learning", "pytorch",
         "tensorflow", "nlp", "figma", "css", "html", "tailwind", "devops", "ci/cd",
         "software", "frontend", "backend", "full stack", "api", "linux",
+        "software development", "web development", "backend development", "programming",
+        "database management", "data science", "cloud", "rest apis",
     },
     "healthcare": {
         "nursing", "patient care", "medical", "pharmacy", "healthcare", "clinical",
@@ -64,12 +66,30 @@ def classify_skill_domain(skill: str) -> set:
     return domains or {"general"}
 
 
-def classify_user_domains(user_skills: list) -> dict:
-    """Return domain -> weight (0-1) based on user skill profile."""
+def classify_user_domains(
+    user_skills: list,
+    roles: list | None = None,
+    cv_text: str = "",
+) -> dict:
+    """Return domain -> weight (0-1) based on skills, roles, and CV text."""
     counts = {}
     for skill in user_skills or []:
         for d in classify_skill_domain(skill):
-            counts[d] = counts.get(d, 0) + 1
+            if d != "general":
+                counts[d] = counts.get(d, 0) + 1
+
+    for role in roles or []:
+        for domain, keywords in DOMAIN_KEYWORDS.items():
+            if any(kw in role.lower() for kw in keywords):
+                counts[domain] = counts.get(domain, 0) + 2
+
+    if cv_text:
+        cv_lower = cv_text.lower()
+        for domain, keywords in DOMAIN_KEYWORDS.items():
+            hits = sum(1 for kw in keywords if kw in cv_lower)
+            if hits:
+                counts[domain] = counts.get(domain, 0) + hits
+
     if not counts:
         return {"general": 1.0}
     total = sum(counts.values())
@@ -98,15 +118,19 @@ def classify_job_domain(job: dict) -> set:
 
 
 def domain_alignment_score(user_domains: dict, job_domains: set) -> float:
-    if "general" in user_domains or not job_domains or job_domains == {"general"}:
-        return 0.85
+    if not job_domains or job_domains == {"general"}:
+        return 0.55 if "general" in user_domains else 0.65
+
+    if "general" in user_domains and len(user_domains) == 1:
+        return 0.5
+
     overlap = sum(user_domains.get(d, 0) for d in job_domains)
     if overlap >= 0.25:
         return min(1.0, 0.55 + overlap * 1.8)
     if overlap > 0:
-        return 0.45 + overlap
-    # Strong mismatch: user is tech-heavy but job is unrelated
+        return 0.4 + overlap
+
     primary = max(user_domains, key=user_domains.get)
-    if primary in ("technology", "healthcare", "business") and primary not in job_domains:
-        return 0.15
-    return 0.35
+    if primary not in job_domains:
+        return 0.12
+    return 0.3

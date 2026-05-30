@@ -72,9 +72,10 @@ router.post('/parse', protect, upload.single('file'), async (req, res, next) => 
     let wordCount    = 0
     let aiAvailable  = false
 
-          let roles = [];
-          let strengths = {};
-          let cvText = "";
+    let roles = []
+    let strengths = {}
+    let cvText = ''
+    let inferredCount = 0
 
     // ── Step 1: Parse CV with Flask ───────────────────────────────────────────
     try {
@@ -92,13 +93,14 @@ router.post('/parse', protect, upload.single('file'), async (req, res, next) => 
 
 
       if (parsed.success) {
-        skills      = parsed.skills            || []
-        yearsExp    = parsed.years_experience  || 0
-        wordCount   = parsed.word_count        || 0
-        roles       = parsed.roles             || []
-        strengths   = parsed.strengths         || {}
-        cvText      = (parsed.raw_text || '').slice(0, 12000)
-        aiAvailable = true
+        skills        = parsed.skills            || []
+        yearsExp      = parsed.years_experience  || 0
+        wordCount     = parsed.word_count        || 0
+        roles         = parsed.roles             || []
+        strengths     = parsed.strengths         || {}
+        cvText        = (parsed.raw_text || '').slice(0, 12000)
+        inferredCount = (parsed.inferred_skills || []).length
+        aiAvailable   = true
       }
     } catch (flaskErr) {
       console.warn('Flask parse failed:', flaskErr.message, '— using fallback')
@@ -128,7 +130,10 @@ router.post('/parse', protect, upload.single('file'), async (req, res, next) => 
       throw new Error('Failed to update user profile — user not found.')
     }
 
-    console.log(`✅ CV parsed for ${updatedUser.email}: ${skills.length} skills saved`)
+    console.log(
+      `✅ CV parsed for ${updatedUser.email}: ${skills.length} skills saved` +
+        (inferredCount ? ` (${inferredCount} inferred from experience)` : ''),
+    )
 
     // ── Step 3: Score jobs against extracted skills ───────────────────────────
     let topMatches = []
@@ -137,15 +142,7 @@ router.post('/parse', protect, upload.single('file'), async (req, res, next) => 
       // Load jobs from MongoDB (real jobs if synced, seeded jobs otherwise)
       const jobs = await Job.find({ isActive: true }).lean().limit(100)
 
-      if (jobs.length > 0) {
-        // Tell Flask about the current job list so it can vectorise them
-        if (aiAvailable) {
-          try {
-            await axios.post(`${AI_URL}/load-jobs`, { jobs }, { timeout: 10000 })
-          } catch { /* non-fatal */ }
-        }
-
-        // Get match scores
+      if (jobs.length > 0 && aiAvailable) {
         const matchRes = await axios.post(
           `${AI_URL}/match`,
           {
@@ -155,6 +152,7 @@ router.post('/parse', protect, upload.single('file'), async (req, res, next) => 
             strengths,
             cv_roles: roles,
             top_n: 15,
+            jobs,
           },
           { timeout: 120000 }
         )
@@ -174,6 +172,8 @@ router.post('/parse', protect, upload.single('file'), async (req, res, next) => 
             matched_skills:  m.matched_skills,
             missing_skills:  m.missing_skills,
             component_scores: m.component_scores,
+            match_factors:   m.match_factors,
+            match_summary:   m.match_summary,
             // Flatten job fields so frontend can render cards directly
             _id:      dbJob._id,
             title:    dbJob.title,

@@ -7,9 +7,9 @@ import logging
 import tempfile
 from flask import Blueprint, request, jsonify
 
-from .matcher    import get_matcher
+from .matcher    import get_matcher, JobMatcher
 from .cv_parser  import parse_cv, extract_skills_from_text
-from .cv_skill_extractor import extract_skills_from_cv_text
+from .cv_skill_extractor import extract_skills_from_cv_text, build_matching_skills
 from .skill_gap  import analyse_skill_gap
 from .skill_ontology import normalize_skills_list
 
@@ -133,17 +133,38 @@ def match_jobs():
     top_n       = int(data.get("top_n", 20))
     strengths   = data.get("strengths") or {}
     cv_roles    = data.get("cv_roles") or []
+    jobs_batch  = data.get("jobs") or []
 
-    # Normalize incoming skills; mine from CV text if profile skills are empty
+    # Isolated matcher per request — no shared mutable state between users
+    active_matcher = JobMatcher()
+    if jobs_batch:
+        active_matcher.fit(jobs_batch)
+    elif matcher._is_fitted:
+        active_matcher.fit(matcher.jobs_data)
+    else:
+        return jsonify({"error": "No jobs loaded. Provide jobs array."}), 400
+
+    # Normalize incoming skills; merge explicit + inferred from experience
     user_skills = normalize_skills_list(user_skills)
-    if cv_text and not user_skills:
-        user_skills = extract_skills_from_cv_text(cv_text)
+    if cv_text:
+        user_skills, inferred = build_matching_skills(user_skills, cv_text, cv_roles)
+    else:
+        inferred = []
 
     if not user_skills and not cv_text:
         return jsonify({"error": "Provide at least one of: skills, cv_text"}), 400
 
+    logger.info(
+        "Match request: %d skills (%d inferred), cv_len=%d, roles=%d, jobs=%d",
+        len(user_skills),
+        len(inferred),
+        len(cv_text or ""),
+        len(cv_roles),
+        len(active_matcher.jobs_data),
+    )
+
     try:
-        matches = matcher.match(
+        matches = active_matcher.match(
             user_skills=user_skills,
             cv_text=cv_text,
             years_exp=years_exp,
@@ -170,9 +191,17 @@ def match_jobs():
                 "component_scores": m["component_scores"],
                 "matched_skills":  m["matched_skills"],
                 "missing_skills":  m["missing_skills"],
+                "match_factors":   m.get("match_factors", []),
+                "match_summary":   m.get("match_summary", ""),
             })
 
-        return jsonify({"success": True, "matches": response_matches, "total": len(response_matches)})
+        return jsonify({
+            "success": True,
+            "matches": response_matches,
+            "total": len(response_matches),
+            "profile_skills": user_skills,
+            "inferred_skills": inferred,
+        })
 
     except Exception as e:
         logger.error(f"/match error: {e}", exc_info=True)
@@ -221,9 +250,19 @@ def parse_cv_endpoint():
         return jsonify({"error": result.get("error", "Parsing failed")}), 500
 
     raw = result.get("raw_text", "")
+    logger.info(
+        "CV parsed: %d skills (%d explicit, %d inferred), %d roles",
+        len(result["skills"]),
+        len(result.get("explicit_skills", [])),
+        len(result.get("inferred_skills", [])),
+        len(result.get("roles", [])),
+    )
+
     return jsonify({
         "success":          True,
         "skills":           result["skills"],
+        "explicit_skills":  result.get("explicit_skills", result["skills"]),
+        "inferred_skills":  result.get("inferred_skills", []),
         "roles":            result.get("roles", []),
         "strengths":        result.get("strengths", {}),
         "years_experience": result["years_experience"],

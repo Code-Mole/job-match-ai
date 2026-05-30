@@ -32,12 +32,6 @@ export async function scoreJobsForUser(user, jobs, topN) {
   const pool = jobs.slice(0, JOB_POOL_CAP);
   const limit = Math.min(topN ?? 25, pool.length);
 
-  try {
-    await axios.post(`${AI_URL()}/load-jobs`, { jobs: pool }, { timeout: 25000 });
-  } catch {
-    /* non-fatal */
-  }
-
   const { data } = await axios.post(
     `${AI_URL()}/match`,
     {
@@ -47,6 +41,7 @@ export async function scoreJobsForUser(user, jobs, topN) {
       strengths: user.skillStrengths || {},
       cv_roles: user.cvRoles || [],
       top_n: limit,
+      jobs: pool,
     },
     { timeout: 30000 },
   );

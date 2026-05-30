@@ -65,6 +65,23 @@ EXPERIENCE_HEADERS = re.compile(
     re.I | re.M,
 )
 
+PROJECT_HEADERS = re.compile(
+    r"(?:^|\n)\s*(projects?|portfolio|personal projects?|key projects?|"
+    r"selected projects?|technical projects?)\s*[:\-]?\s*\n",
+    re.I | re.M,
+)
+
+CERT_HEADERS = re.compile(
+    r"(?:^|\n)\s*(certifications?|certificates?|licenses?|credentials?|"
+    r"professional certifications?)\s*[:\-]?\s*\n",
+    re.I | re.M,
+)
+
+EDUCATION_HEADERS = re.compile(
+    r"(?:^|\n)\s*(education|academic|qualifications?|degrees?)\s*[:\-]?\s*\n",
+    re.I | re.M,
+)
+
 ROLE_LINE = re.compile(
     r"^[\s•\-\*]*([A-Z][A-Za-z0-9\s/&\-]{4,60}?)"
     r"(?:\s+at\s+|\s+@\s+|\s+\|\s+|\s+[-\u2013]\s+)",
@@ -251,6 +268,90 @@ def extract_roles_from_cv(text: str) -> list:
     return roles[:15]
 
 
+def _section_after_header(text: str, header_pattern: re.Pattern, max_len: int = 3000) -> str:
+    for m in header_pattern.finditer(text):
+        chunk = text[m.end() : m.end() + max_len]
+        next_hdr = re.search(
+            r"(?:^|\n)\s*(?:work experience|education|skills|projects|certifications|"
+            r"references|contact)\s*[:\-]?\s*\n",
+            chunk,
+            re.I | re.M,
+        )
+        return chunk[: next_hdr.start()] if next_hdr else chunk[:max_len]
+    return ""
+
+
+def extract_projects_from_cv(text: str) -> list:
+    """Project names / descriptions from CV projects section."""
+    if not text:
+        return []
+    section = _section_after_header(text, PROJECT_HEADERS)
+    if not section:
+        return []
+
+    projects = []
+    seen = set()
+    for line in section.split("\n"):
+        line = line.strip()
+        if not line or len(line) < 8:
+            continue
+        cleaned = _clean_phrase(re.sub(r"^[\s•\-\*]+", "", line))
+        if cleaned and cleaned.lower() not in seen and _is_valid_skill(cleaned):
+            seen.add(cleaned.lower())
+            projects.append(cleaned)
+    return projects[:12]
+
+
+def extract_certifications_from_cv(text: str) -> list:
+    """Certifications and licenses listed on the CV."""
+    if not text:
+        return []
+    section = _section_after_header(text, CERT_HEADERS, 2000)
+    if not section:
+        return []
+
+    certs = []
+    seen = set()
+    for part in re.split(r"[,;\n]|(?:\s+and\s+)", section):
+        phrase = _clean_phrase(re.sub(r"^[\s•\-\*]+", "", part))
+        if not phrase or len(phrase) < 4:
+            continue
+        if phrase.lower() in seen:
+            continue
+        if _is_valid_skill(phrase) or re.search(
+            r"\b(pmp|aws|cissp|cscs|cpa|cfa|prince2)\b", phrase, re.I
+        ):
+            seen.add(phrase.lower())
+            certs.append(phrase.title() if phrase.islower() else phrase)
+    return certs[:15]
+
+
+def extract_education_from_cv(text: str) -> list:
+    """Degree / institution lines from education section."""
+    if not text:
+        return []
+    section = _section_after_header(text, EDUCATION_HEADERS, 2500)
+    if not section:
+        return []
+
+    entries = []
+    seen = set()
+    for line in section.split("\n"):
+        line = line.strip()
+        if not line or len(line) < 6:
+            continue
+        if re.search(
+            r"\b(bachelor|master|phd|b\.?sc|m\.?sc|mba|degree|diploma|university|college)\b",
+            line,
+            re.I,
+        ):
+            key = line.lower()[:80]
+            if key not in seen:
+                seen.add(key)
+                entries.append(line[:120])
+    return entries[:8]
+
+
 def extract_strengths(text: str, skills: list) -> dict:
     """
     Weight skills by how prominently they appear on the CV (frequency + skills section).
@@ -292,13 +393,142 @@ def extract_strengths(text: str, skills: list) -> dict:
     return strengths
 
 
+# Experience / title phrases → inferred canonical skills (priority after explicit skills)
+EXPERIENCE_INFERENCE_RULES = [
+    (re.compile(r"\b(software engineer|software developer|full[- ]?stack|web developer|frontend developer|backend developer|mobile developer|devops engineer|qa engineer|programmer)\b", re.I), ["Software Development", "Programming"]),
+    (re.compile(r"\b(web application|web apps?|frontend|react|vue|angular|javascript|typescript)\b", re.I), ["JavaScript", "Web Development"]),
+    (re.compile(r"\b(rest api|restful|backend|server[- ]side|node\.?js|django|flask|fastapi)\b", re.I), ["REST APIs", "Backend Development"]),
+    (re.compile(r"\b(database|sql|postgresql|mysql|mongodb|redis)\b", re.I), ["Database Management", "SQL"]),
+    (re.compile(r"\b(cloud|aws|azure|gcp|kubernetes|docker|ci/?cd)\b", re.I), ["DevOps", "Cloud"]),
+    (re.compile(r"\b(machine learning|deep learning|data scien|nlp|pytorch|tensorflow)\b", re.I), ["Machine Learning", "Data Science"]),
+    (re.compile(r"\b(marketing manager|digital marketing|seo|content marketing|brand manager)\b", re.I), ["Marketing", "Digital Marketing"]),
+    (re.compile(r"\b(sales executive|account manager|business development|b2b sales)\b", re.I), ["Sales", "Business Development"]),
+    (re.compile(r"\b(financial analyst|accountant|bookkeeper|audit|finance manager)\b", re.I), ["Accounting", "Finance"]),
+    (re.compile(r"\b(registered nurse|clinical nurse|patient care|healthcare assistant)\b", re.I), ["Nursing", "Healthcare"]),
+    (re.compile(r"\b(construction project|site manager|civil engineer|quantity surveyor)\b", re.I), ["Construction", "Project Management"]),
+    (re.compile(r"\b(teacher|lecturer|tutor|classroom|curriculum)\b", re.I), ["Teaching", "Education"]),
+    (re.compile(r"\b(warehouse|logistics|supply chain|inventory|forklift)\b", re.I), ["Logistics", "Warehouse"]),
+    (re.compile(r"\b(hotel|restaurant|chef|hospitality|barista)\b", re.I), ["Hospitality", "Chef"]),
+    (re.compile(r"\b(built|developed|designed|created)\s+(api|apis|rest)\b", re.I), ["REST APIs", "API Development"]),
+    (re.compile(r"\b(managed team|led team|team lead|supervised|mentored)\b", re.I), ["Leadership", "Team Management"]),
+    (re.compile(r"\b(project management|managed projects|project lead|programme manager)\b", re.I), ["Project Management"]),
+    (re.compile(r"\b(automated tests?|unit tests?|qa|quality assurance)\b", re.I), ["Testing", "QA"]),
+    (re.compile(r"\b(agile|scrum|sprint|kanban)\b", re.I), ["Agile", "Project Management"]),
+    (re.compile(r"\b(data analysis|analytics|reporting|dashboards?)\b", re.I), ["Data Analysis", "Excel"]),
+]
+
+ROLE_TITLE_INFERENCE = [
+    (re.compile(r"\b(software|developer|engineer|devops|programmer|architect)\b", re.I), ["Software Development"]),
+    (re.compile(r"\b(frontend|ui engineer|web developer)\b", re.I), ["JavaScript", "Web Development"]),
+    (re.compile(r"\b(backend|api developer)\b", re.I), ["Backend Development", "REST APIs"]),
+    (re.compile(r"\b(marketing|brand|seo)\b", re.I), ["Marketing"]),
+    (re.compile(r"\b(sales|account executive|business development)\b", re.I), ["Sales"]),
+    (re.compile(r"\b(finance|accountant|analyst|auditor)\b", re.I), ["Finance", "Accounting"]),
+    (re.compile(r"\b(nurse|clinical|medical|healthcare)\b", re.I), ["Healthcare", "Nursing"]),
+    (re.compile(r"\b(construction|builder|surveyor|site manager)\b", re.I), ["Construction"]),
+    (re.compile(r"\b(teacher|lecturer|educator|tutor)\b", re.I), ["Teaching"]),
+    (re.compile(r"\b(driver|warehouse|logistics)\b", re.I), ["Logistics"]),
+    (re.compile(r"\b(chef|hospitality|waiter|bartender)\b", re.I), ["Hospitality"]),
+]
+
+
+def _experience_section_text(text: str) -> str:
+    """Return work-experience chunk for inference mining."""
+    if not text:
+        return ""
+    chunks = []
+    for m in EXPERIENCE_HEADERS.finditer(text):
+        chunk = text[m.end() : m.end() + 5000]
+        end = EXPERIENCE_HEADERS.search(chunk)
+        chunks.append(chunk[: end.start()] if end else chunk[:4000])
+    return "\n".join(chunks) if chunks else text[:8000]
+
+
+def infer_skills_from_experience(text: str, roles: list | None = None) -> list:
+    """
+    Infer skills from work experience, responsibilities, job titles, and projects
+    when explicit skills are sparse or missing.
+    """
+    if not text and not roles:
+        return []
+
+    inferred = {}
+    exp_text = _experience_section_text(text)
+    blob = f"{exp_text}\n{' '.join(roles or [])}".lower()
+
+    for pattern, skills in EXPERIENCE_INFERENCE_RULES:
+        if pattern.search(blob):
+            for skill in skills:
+                inferred[skill.lower()] = skill
+
+    for role in roles or []:
+        for pattern, skills in ROLE_TITLE_INFERENCE:
+            if pattern.search(role):
+                for skill in skills:
+                    inferred[skill.lower()] = skill
+
+    return sorted(inferred.values(), key=lambda s: s.lower())
+
+
+def build_matching_skills(
+    explicit_skills: list,
+    cv_text: str = "",
+    roles: list | None = None,
+) -> tuple[list, list]:
+    """
+    Merge explicit + inferred skills for matching.
+    Returns (all_skills_for_matching, inferred_only).
+    """
+    explicit = list(explicit_skills or [])
+    if not explicit and cv_text:
+        explicit = extract_skills_from_cv_text(cv_text)
+
+    inferred = infer_skills_from_experience(cv_text, roles)
+
+    # Mine projects and certifications for additional implicit skills
+    for project in extract_projects_from_cv(cv_text):
+        for pattern, skills in EXPERIENCE_INFERENCE_RULES:
+            if pattern.search(project):
+                for skill in skills:
+                    inferred.append(skill)
+    for cert in extract_certifications_from_cv(cv_text):
+        canonical = normalize_skill(cert)
+        if _is_valid_skill(canonical):
+            inferred.append(canonical if canonical != cert.lower() else cert)
+
+    inferred_dedup = {}
+    for s in inferred:
+        inferred_dedup[s.lower()] = s
+    inferred = sorted(inferred_dedup.values(), key=lambda s: s.lower())
+
+    merged = {}
+    for s in explicit:
+        merged[s.lower()] = s
+    for s in inferred:
+        if s.lower() not in merged:
+            merged[s.lower()] = s
+
+    all_skills = sorted(merged.values(), key=lambda s: s.lower())
+    inferred_only = [s for s in inferred if s.lower() not in {e.lower() for e in explicit}]
+    return all_skills, inferred_only
+
+
 def extract_cv_profile(text: str) -> dict:
     """Full CV profile for matching."""
-    skills = extract_skills_from_cv_text(text)
+    explicit = extract_skills_from_cv_text(text)
     roles = extract_roles_from_cv(text)
+    projects = extract_projects_from_cv(text)
+    certifications = extract_certifications_from_cv(text)
+    education = extract_education_from_cv(text)
+    skills, inferred = build_matching_skills(explicit, text, roles)
     strengths = extract_strengths(text, skills)
     return {
         "skills": skills,
+        "explicit_skills": explicit,
+        "inferred_skills": inferred,
         "roles": roles,
+        "projects": projects,
+        "certifications": certifications,
+        "education": education,
         "strengths": strengths,
     }

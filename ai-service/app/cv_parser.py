@@ -156,6 +156,8 @@ def parse_cv(file_path: str) -> dict:
             "success":          True,
             "raw_text":         raw_text,
             "skills":           skills,
+            "explicit_skills":  profile.get("explicit_skills", skills),
+            "inferred_skills":  profile.get("inferred_skills", []),
             "roles":            profile.get("roles", []),
             "strengths":        profile.get("strengths", {}),
             "years_experience": years_exp,

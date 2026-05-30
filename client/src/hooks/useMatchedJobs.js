@@ -23,7 +23,12 @@ export function useMatchedJobs(limit = 12) {
     setError(null);
     try {
       const url = `/api/jobs/match?limit=${limit}&top_n=${limit}`;
-      const data = await cachedGet(url, 90_000);
+      const profileKey = [
+        user._id,
+        user.cvUploadedAt || 'none',
+        (user.skills || []).length,
+      ].join('::');
+      const data = await cachedGet(url, 60_000, null, `${url}::${profileKey}`);
 
       const list = dedupeJobs(
         (data.matches || []).map((m) => ({
@@ -40,6 +45,8 @@ export function useMatchedJobs(limit = 12) {
           matched_skills: m.matched_skills,
           missing_skills: m.missing_skills,
           component_scores: m.component_scores,
+          match_factors: m.match_factors,
+          match_summary: m.match_summary,
         })),
       )
         .filter((j) => j._id)

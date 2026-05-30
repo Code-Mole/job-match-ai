@@ -127,6 +127,52 @@ def normalize_skills_list(skills: list) -> list:
     return normalized
 
 
+# Skills in the same family count as partial semantic overlap
+SEMANTIC_SKILL_GROUPS = [
+    {"React", "JavaScript", "TypeScript", "Frontend", "Web Development", "Next.js", "Vue", "Angular", "CSS", "HTML"},
+    {"Node.js", "Backend Development", "REST APIs", "Express", "Python", "Django", "Flask", "FastAPI", "Java", "Go"},
+    {"PostgreSQL", "MySQL", "MongoDB", "Database Management", "SQL", "Redis"},
+    {"AWS", "GCP", "Azure", "Cloud", "DevOps", "Docker", "Kubernetes", "CI/CD"},
+    {"Machine Learning", "Deep Learning", "Python", "PyTorch", "TensorFlow", "NLP", "Data Science"},
+    {"Marketing", "Digital Marketing", "SEO", "Sales", "Business Development"},
+    {"Accounting", "Finance", "Excel", "Bookkeeping"},
+    {"Nursing", "Healthcare", "Patient Care"},
+    {"Construction", "Project Management"},
+    {"Teaching", "Education", "Lesson Planning"},
+    {"Logistics", "Warehouse", "Supply Chain"},
+    {"Leadership", "Project Management", "Team Management"},
+]
+
+_GROUP_LOOKUP = {}
+for group in SEMANTIC_SKILL_GROUPS:
+    for skill in group:
+        _GROUP_LOOKUP[normalize_skill(skill).lower()] = group
+
+
+def skill_semantic_similarity(user_skill: str, job_skill: str) -> float:
+    """
+    Return 0.0–1.0 relatedness between two skills (exact, substring, or same family).
+    """
+    us = normalize_skill(user_skill).lower()
+    js = normalize_skill(job_skill).lower()
+    if not us or not js:
+        return 0.0
+    if us == js or us in js or js in us:
+        return 1.0
+
+    user_group = _GROUP_LOOKUP.get(us)
+    job_group = _GROUP_LOOKUP.get(js)
+    if user_group and job_group and user_group is job_group:
+        return 0.55
+
+    for alias, canonical in _REVERSE_MAP.items():
+        if alias == us or alias == js:
+            other = js if alias == us else us
+            if canonical.lower() == other or canonical.lower() in other:
+                return 0.85
+    return 0.0
+
+
 def get_all_canonical_skills() -> list:
     """Return the full list of canonical skill names for building the TF-IDF vocabulary."""
     return list(SKILL_ALIASES.keys())

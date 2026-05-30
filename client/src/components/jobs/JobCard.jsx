@@ -117,6 +117,22 @@ export default function JobCard({ job, loading = false }) {
         </span>
       </div>
 
+      {job.match_summary && (
+        <p className="mb-3 text-xs font-medium text-blue-600 dark:text-blue-400 leading-snug">
+          {job.match_summary}
+        </p>
+      )}
+
+      {job.match_factors?.length > 0 && (
+        <ul className="mb-3 space-y-1 text-xs text-slate-500 dark:text-slate-400">
+          {job.match_factors.slice(0, 3).map((factor) => (
+            <li key={factor} className="leading-snug">
+              • {factor}
+            </li>
+          ))}
+        </ul>
+      )}
+
       {/* Match score bar */}
       <div className="mb-4">
         <div className="flex items-center justify-between mb-1.5">

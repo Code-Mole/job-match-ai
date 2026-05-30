@@ -4,6 +4,7 @@ import MessageBubble from "../../components/assistant/MessageBubble";
 import TypingIndicator from "../../components/assistant/TypingIndicator";
 import PromptChip from "../../components/assistant/PromptChip";
 import { useChat, SUGGESTED_PROMPTS } from "../../hooks/useChat";
+import Footer from "../../components/layouts/Footer";
 
 export default function AssistantPage() {
   const { messages, loading, error, sendMessage, clearChat } = useChat();
@@ -158,6 +159,7 @@ export default function AssistantPage() {
             </p>
           </div>
         </div>
+        <Footer />
       </div>
   );
 }

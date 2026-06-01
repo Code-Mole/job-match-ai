@@ -216,7 +216,7 @@ export default function LoginPage() {
           >
             <GoogleIcon /> Google
           </button>
-          {/* <button
+          <button
             type="button"
             onClick={() => { window.location.href = `${API_BASE}/api/auth/linkedin`; }}
             className="
@@ -227,7 +227,7 @@ export default function LoginPage() {
           "
           >
             <LinkedInIcon /> LinkedIn
-          </button> */}
+          </button>
         </div>
 
         {/* Switch to signup */}

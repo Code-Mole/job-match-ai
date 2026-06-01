@@ -319,7 +319,7 @@ export default function SignupPage() {
           >
             <GoogleIcon /> Google
           </button>
-          {/* <button
+          <button
             type="button"
             onClick={() => { window.location.href = `${API_BASE}/api/auth/linkedin`; }}
             className="
@@ -330,7 +330,7 @@ export default function SignupPage() {
           "
           >
             <LinkedInIcon /> LinkedIn
-          </button> */}
+          </button>
         </div>
 
         <p className="text-center text-sm text-slate-500 dark:text-slate-500 mt-6">

@@ -116,6 +116,12 @@ const COLOR_MAP = {
     border: "border-purple-200 dark:border-purple-700/40",
     text: "text-purple-600 dark:text-purple-400",
   },
+  emerald: {
+    badge: "bg-emerald-600",
+    light: "bg-emerald-50 dark:bg-emerald-900/20",
+    border: "border-emerald-200 dark:border-emerald-700/40",
+    text: "text-emerald-600 dark:text-emerald-400",
+  },
 };
 
 const PATH_COLORS = ["blue", "indigo", "purple", "emerald"];

@@ -12,6 +12,7 @@ import CareersPage from "./pages/careers/CareersPage";
 import SkillsPage from "./pages/skills/SkillsPage";
 import AssistantPage from "./pages/assistant/AssistantPage";
 import SettingsPage from "./pages/settings/SettingsPage";
+import LandingPage from "./pages/landing/LandingPage";
 
 function ProtectedRoute() {
   const { user, loading } = useAuth();
@@ -30,17 +31,25 @@ function ProtectedRoute() {
 }
 
 export default function App() {
+    const { user } = useAuth();
   return (
     <Routes>
+      <Route
+        path="/"
+        element={user ? <Navigate to="/dashboard" replace /> : <LandingPage />}
+      />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/signup" element={<SignupPage />} />
       <Route path="/auth/callback" element={<AuthCallbackPage />} />
 
       <Route element={<ProtectedRoute />}>
         <Route element={<ProtectedLayout />}>
-          <Route index element={<DashboardPage />} />
+          <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="jobs" element={<JobsPage />} />
-          <Route path="jobs/applied" element={<MyJobsPage variant="applied" />} />
+          <Route
+            path="jobs/applied"
+            element={<MyJobsPage variant="applied" />}
+          />
           <Route path="jobs/saved" element={<MyJobsPage variant="saved" />} />
           <Route path="jobs/:id" element={<JobDetailPage />} />
           <Route path="careers" element={<CareersPage />} />

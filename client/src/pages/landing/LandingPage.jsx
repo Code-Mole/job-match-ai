@@ -224,25 +224,25 @@ export default function LandingPage() {
 
   const testimonials = [
     {
-      name: "Amara Osei",
-      role: "Software Engineer",
-      avatar: "AO",
+      name: "Opoku Emmanuel Atta",
+      role: "Data Analyst",
+      avatar: "DA",
       color: "blue",
       text: "I uploaded my CV and within 30 seconds had a ranked list of jobs with exact skill breakdowns. I could see precisely why each role was a good fit — no guessing.",
       stars: 5,
     },
     {
-      name: "Kezia Mwangi",
-      role: "Marketing Manager",
-      avatar: "KM",
+      name: "Punobyin Rapheal Tibil",
+      role: "Software Engineer",
+      avatar: "SE",
       color: "purple",
       text: "The skill gap feature changed how I approach job hunting. Instead of wondering why I get rejected, I now know exactly what to learn next and have a clear plan.",
       stars: 5,
     },
     {
-      name: "David Asante",
-      role: "Data Analyst",
-      avatar: "DA",
+      name: "Emmanuel Asanga",
+      role: "Marketing Specialist",
+      avatar: "MS",
       color: "emerald",
       text: "The AI assistant gave me career advice that was actually tailored to my background. It knew my skills and gave concrete suggestions rather than generic tips.",
       stars: 5,
@@ -476,7 +476,7 @@ export default function LandingPage() {
               <div className="bg-blue-600 px-4 py-3">
                 <p className="text-white/80 text-xs mb-1">Your top match</p>
                 <p className="text-white font-bold text-sm">
-                  Senior Frontend Dev
+                  Senior Frontend Developer
                 </p>
               </div>
               <div className="p-4 space-y-3">
@@ -577,7 +577,7 @@ export default function LandingPage() {
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-8">
             {[
               {
-                value: 50000,
+                value: 5000,
                 suffix: "+",
                 label: "Live job listings",
                 color: "text-blue-600 dark:text-blue-400",
@@ -589,7 +589,7 @@ export default function LandingPage() {
                 color: "text-purple-600 dark:text-purple-400",
               },
               {
-                value: 27,
+                value: 16,
                 suffix: "",
                 label: "Job sectors covered",
                 color: "text-emerald-600 dark:text-emerald-400",
@@ -759,7 +759,7 @@ export default function LandingPage() {
             </h2>
             <p className="text-slate-500 dark:text-slate-400 max-w-xl mx-auto">
               Jobs aggregated from Adzuna and Remotive across every professional
-              sector — over 27 categories.
+              sector — over 16 categories.
             </p>
           </div>
 
@@ -993,7 +993,7 @@ export default function LandingPage() {
               {[
                 { label: "Sign in", action: () => navigate("/login") },
                 { label: "Sign up", action: () => navigate("/signup") },
-                { label: "Dashboard", action: () => navigate("/") },
+                { label: "Dashboard", action: () => navigate("/dashboard") },
               ].map(({ label, action }) => (
                 <button
                   key={label}
@@ -1007,7 +1007,7 @@ export default function LandingPage() {
 
             {/* Credit */}
             <p className="text-xs text-slate-400 dark:text-slate-500">
-              Built with React · Flask · Claude API
+              Built with React · Flask · Node
             </p>
           </div>
 

@@ -5,14 +5,14 @@ import helmet from "helmet";
 import morgan from "morgan";
 import connectDB from "./config/db.js";
 import { errorHandler, notFound } from "./middleware/errorHandler.js";
+import adminRoutes from "./routes/admin/index.js";
+import notificationsRoutes from "./routes/notifications.js";
 
 // Route imports
 import authRoutes from "./routes/auth.js";
 import jobRoutes from "./routes/jobs.js";
 import cvRoutes from "./routes/cv.js";
 import aiRoutes from "./routes/ai.js";
-
-
 
 dotenv.config();
 // ── Connect to MongoDB ────────────────────────────────────────────────────────
@@ -75,7 +75,8 @@ app.use("/api/auth", authRoutes);
 app.use("/api/jobs", jobRoutes);
 app.use("/api/cv", cvRoutes);
 app.use("/api/ai", aiRoutes);
-
+app.use("/api/notifications", notificationsRoutes);
+app.use("/api/admin", adminRoutes);
 // ── 404 + error handlers ──────────────────────────────────────────────────────
 // notFound must come after all routes
 app.use(notFound);
@@ -86,8 +87,6 @@ app.use(errorHandler);
 app.listen(PORT, () => {
   console.log(`🚀 Server running on http://localhost:${PORT}`);
   console.log(`📋 Environment: ${process.env.NODE_ENV}`);
-  
 });
-
 
 export default app;

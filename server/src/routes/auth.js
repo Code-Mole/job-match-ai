@@ -258,34 +258,38 @@ router.put("/change-password", protect, async (req, res, next) => {
 });
 
 // ── DELETE /api/auth/account ──────────────────────────────────────────────────
-router.delete('/account', protect, async (req, res, next) => {
+router.delete("/account", protect, async (req, res, next) => {
   try {
-    await User.findByIdAndDelete(req.user._id)
-    res.json({ success: true, message: 'Account deleted.' })
-  } catch (err) { next(err) }
-})
+    await User.findByIdAndDelete(req.user._id);
+    res.json({ success: true, message: "Account deleted." });
+  } catch (err) {
+    next(err);
+  }
+});
 
 // ── GET /api/auth/export ──────────────────────────────────────────────────────
-router.get('/export', protect, async (req, res, next) => {
+router.get("/export", protect, async (req, res, next) => {
   try {
-    const user = await User.findById(req.user._id).select('-password -__v')
-    res.json({ exported_at: new Date(), user })
-  } catch (err) { next(err) }
-})
+    const user = await User.findById(req.user._id).select("-password -__v");
+    res.json({ exported_at: new Date(), user });
+  } catch (err) {
+    next(err);
+  }
+});
 
 // ── GET /api/auth/stats ───────────────────────────────────────────────────────
-router.get('/stats', protect, async (req, res, next) => {
+router.get("/stats", protect, async (req, res, next) => {
   try {
-    const user = req.user
+    const user = req.user;
 
     const [totalJobs, appliedCount, savedCount] = await Promise.all([
       Job.countDocuments({ isActive: true }),
       user.appliedJobs?.length || 0,
-      user.savedJobs?.length   || 0,
-    ])
+      user.savedJobs?.length || 0,
+    ]);
 
-    let avgMatchScore = null
-    let topMatchScore = null
+    let avgMatchScore = null;
+    let topMatchScore = null;
 
     if (user.skills?.length || user.cvText) {
       try {
@@ -307,19 +311,19 @@ router.get('/stats', protect, async (req, res, next) => {
       }
     }
 
-    const skillPts = Math.min(30, (user.skills?.length || 0) * 3)
+    const skillPts = Math.min(30, (user.skills?.length || 0) * 3);
     const profileStrength = Math.min(
       100,
       Math.round(
         (user.cvParsed ? 35 : 0) +
-        skillPts +
-        (user.experience?.length > 0 ? 15 : 0) +
-        (user.headline ? 8 : 0) +
-        (user.bio ? 8 : 0) +
-        (user.location ? 4 : 0) +
-        (avgMatchScore ? Math.min(10, Math.round(avgMatchScore / 10)) : 0),
+          skillPts +
+          (user.experience?.length > 0 ? 15 : 0) +
+          (user.headline ? 8 : 0) +
+          (user.bio ? 8 : 0) +
+          (user.location ? 4 : 0) +
+          (avgMatchScore ? Math.min(10, Math.round(avgMatchScore / 10)) : 0),
       ),
-    )
+    );
 
     res.json({
       success: true,
@@ -332,9 +336,11 @@ router.get('/stats', protect, async (req, res, next) => {
       avgMatchScore,
       topMatchScore,
       smtpConfigured: isSmtpConfigured(),
-    })
-  } catch (err) { next(err) }
-})
+    });
+  } catch (err) {
+    next(err);
+  }
+});
 
 const careerInsightsCache = new Map();
 const CAREER_CACHE_MS = 2 * 60 * 1000;
@@ -383,32 +389,85 @@ router.post("/settings/notification-test", protect, async (req, res, next) => {
 });
 
 // ── GET /api/auth/settings/email-status ─────────────────────────────────────
-router.get('/settings/email-status', protect, async (req, res) => {
+router.get("/settings/email-status", protect, async (req, res) => {
   res.json({
     success: true,
     configured: isSmtpConfigured(),
     host: process.env.SMTP_HOST || null,
     from: process.env.SMTP_FROM || process.env.SMTP_USER || null,
-  })
-})
+  });
+});
 
 // ── POST /api/auth/settings/test-email ────────────────────────────────────────
-router.post('/settings/test-email', protect, async (req, res, next) => {
+router.post("/settings/test-email", protect, async (req, res, next) => {
   try {
-    await verifySmtpConnection()
+    await verifySmtpConnection();
     await sendMail({
       to: req.user.email,
-      subject: 'JobMatch AI — SMTP test successful',
-      html: `<p>Hi ${req.user.name?.split(' ')[0] || 'there'},</p><p>Your SMTP settings are working. Application confirmation emails will be delivered to this address.</p>`,
-      text: 'Your JobMatch AI SMTP settings are working.',
-    })
-    res.json({ success: true, message: `Test email sent to ${req.user.email}` })
+      subject: "JobMatch AI — SMTP test successful",
+      html: `<p>Hi ${req.user.name?.split(" ")[0] || "there"},</p><p>Your SMTP settings are working. Application confirmation emails will be delivered to this address.</p>`,
+      text: "Your JobMatch AI SMTP settings are working.",
+    });
+    res.json({
+      success: true,
+      message: `Test email sent to ${req.user.email}`,
+    });
   } catch (err) {
     res.status(400).json({
       success: false,
-      message: err.message || 'SMTP test failed. Check server/.env credentials.',
-    })
+      message:
+        err.message || "SMTP test failed. Check server/.env credentials.",
+    });
   }
-})
+});
+
+// ── POST /api/auth/bootstrap-admin ────────────────────────────────────────────
+// One-time use: promotes an existing user to admin if the correct setup
+// key is provided. The key is read from ADMIN_SETUP_KEY in the environment.
+//
+// SECURITY: After creating your first admin account, either delete
+// ADMIN_SETUP_KEY from your environment variables or change it to a new
+// value. Leaving it set indefinitely would allow anyone who discovers
+// the key to grant themselves admin access.
+router.post("/bootstrap-admin", async (req, res, next) => {
+  try {
+    const { email, setupKey } = req.body;
+
+    if (!process.env.ADMIN_SETUP_KEY) {
+      return res.status(403).json({ message: "Admin bootstrap is disabled." });
+    }
+
+    if (!setupKey || setupKey !== process.env.ADMIN_SETUP_KEY) {
+      return res.status(403).json({ message: "Invalid setup key." });
+    }
+
+    if (!email) {
+      return res.status(400).json({ message: "Email is required." });
+    }
+
+    const user = await User.findOneAndUpdate(
+      { email: email.toLowerCase().trim() },
+      { $set: { role: "admin" } },
+      { new: true },
+    );
+
+    if (!user) {
+      return res
+        .status(404)
+        .json({
+          message:
+            "User not found. Register a normal account first, then call this endpoint.",
+        });
+    }
+
+    res.json({
+      success: true,
+      message: `${user.email} is now an admin.`,
+      user: user.toSafeObject(),
+    });
+  } catch (err) {
+    next(err);
+  }
+});
 
 export default router;

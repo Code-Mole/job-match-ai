@@ -20,6 +20,18 @@ const jobSchema = new mongoose.Schema(
       required: true,
       trim: true,
     },
+    country: {
+      type: String,
+      trim: true,
+      default: "",
+      index: true,
+    },
+
+    region: {
+      type: String,
+      trim: true,
+      default: "",
+    },
 
     type: {
       type: String,
@@ -158,8 +170,18 @@ const jobSchema = new mongoose.Schema(
 
     source: {
       type: String,
-      enum: ["manual", "adzuna", "remotive", "seed"],
+      enum: ["manual", "adzuna", "remotive", "seed", "admin"],
       default: "manual",
+    },
+    createdBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
+    updatedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
     },
   },
   {
@@ -175,5 +197,7 @@ jobSchema.index({
 });
 
 jobSchema.index({ fingerprint: 1 }, { unique: true, sparse: true });
+
+jobSchema.index({ country: 1, isActive: 1, postedAt: -1 });
 
 export default mongoose.model("Job", jobSchema);

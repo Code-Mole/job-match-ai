@@ -11,6 +11,7 @@ import {
   loadFilteredJobs,
   scoreJobsForUser,
 } from "../utils/jobMatchHelper.js";
+import { notify } from "../utils/notify.js";
 
 const router = express.Router();
 // ── GET /api/jobs — List with filters + pagination ───────────────────────────
@@ -643,7 +644,13 @@ router.post("/:id/apply", protect, async (req, res, next) => {
       status: "applied",
     });
     await user.save({ validateBeforeSave: false });
-
+    // Create notification
+    await notify(req.user._id, {
+      type: "application_update",
+      title: "Application submitted",
+      message: `You applied to ${job.title} at ${job.company}.`,
+      link: `/jobs/${job._id}`,
+    });
     // Send confirmation email (non-blocking)
     sendApplicationEmail(user, job).catch((err) =>
       console.warn("Email send failed:", err.message),

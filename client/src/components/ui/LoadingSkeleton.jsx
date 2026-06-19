@@ -1,5 +1,5 @@
 // A single shimmer bar — used anywhere we're waiting for data
-export function Skeleton({ className = "" }) {
+export default function Skeleton({ className = "" }) {
   return (
     <div
       className={`
@@ -12,7 +12,7 @@ export function Skeleton({ className = "" }) {
 }
 
 // Full job card skeleton — matches JobCard dimensions
-export function JobCardSkeleton() {
+export  function JobCardSkeleton() {
   return (
     <div
       className="

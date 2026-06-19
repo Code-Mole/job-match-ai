@@ -13,6 +13,13 @@ import SkillsPage from "./pages/skills/SkillsPage";
 import AssistantPage from "./pages/assistant/AssistantPage";
 import SettingsPage from "./pages/settings/SettingsPage";
 import LandingPage from "./pages/landing/LandingPage";
+import AdminRoute from "./components/admin/AdminRoute";
+import AdminLayout from "./components/layouts/AdminLayout";
+import AdminOverviewPage from "./pages/admin/adminOverviewPage";
+import AdminJobsPage from "./pages/admin/AdminJobsPage";
+import AdminUsersPage from "./pages/admin/AdminUsersPage";
+import AdminJobFormPage from "./pages/admin/AdminJobFormPage";
+import AdminBulkImportPage from "./pages/admin/AdminBulkImportPage";
 
 function ProtectedRoute() {
   const { user, loading } = useAuth();
@@ -31,7 +38,7 @@ function ProtectedRoute() {
 }
 
 export default function App() {
-    const { user } = useAuth();
+  const { user } = useAuth();
   return (
     <Routes>
       <Route
@@ -57,6 +64,24 @@ export default function App() {
           <Route path="assistant" element={<AssistantPage />} />
           <Route path="settings" element={<SettingsPage />} />
         </Route>
+      </Route>
+
+      {/* Admin dashboard — separate guarded layout, distinct from the
+    main app's <ProtectedRoute><AppLayout /></ProtectedRoute> tree */}
+      <Route
+        path="/admin"
+        element={
+          <AdminRoute>
+            <AdminLayout />
+          </AdminRoute>
+        }
+      >
+        <Route index element={<AdminOverviewPage />} />
+        <Route path="jobs" element={<AdminJobsPage />} />
+        <Route path="users" element={<AdminUsersPage />} />
+        <Route path="jobs/new" element={<AdminJobFormPage />} />
+        <Route path="jobs/:id/edit" element={<AdminJobFormPage />} />
+        <Route path="jobs/bulk-import" element={<AdminBulkImportPage />} />
       </Route>
 
       <Route path="*" element={<Navigate to="/" replace />} />

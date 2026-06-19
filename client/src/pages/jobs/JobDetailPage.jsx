@@ -17,7 +17,7 @@ import {
   Users,
   Star,
 } from "lucide-react";
-import { Skeleton } from "../../components/ui/LoadingSkeleton";
+import  Skeleton  from "../../components/ui/LoadingSkeleton";
 import { useJob } from "../../hooks/useJob";
 import { useAuth } from "../../context/AuthContext";
 import axios from "axios";

@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import { useToast } from "../ui/Toast";
+import { ShieldCheck } from "lucide-react";
 
 function Avatar({ name, size = "md" }) {
   const initials = (name || "U")
@@ -146,7 +147,21 @@ export default function ProfileDropdown() {
           </div>
 
           {/* Menu items */}
+          {/* Menu items */}
           <div className="p-1.5">
+            {user?.role === "admin" && (
+              <button
+                onClick={() => {
+                  navigate("/admin");
+                  setOpen(false);
+                }}
+                className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium text-violet-700 dark:text-violet-300 hover:bg-violet-50 dark:hover:bg-violet-900/20 transition-colors"
+              >
+                <ShieldCheck size={16} />
+                Admin Dashboard
+              </button>
+            )}
+
             {menuItems.map(({ icon: Icon, label, action }) => (
               <button
                 key={label}

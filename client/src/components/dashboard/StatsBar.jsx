@@ -1,5 +1,5 @@
 import { Briefcase, Target, TrendingUp, BookOpen } from 'lucide-react'
-import { Skeleton } from '../ui/LoadingSkeleton'
+import  Skeleton  from '../ui/LoadingSkeleton'
 
 export default function StatsBar({ stats }) {
   const items = [

@@ -12,7 +12,7 @@ import SkillBar from "../../components/skills/SkillBar";
 import CourseCard from "../../components/skills/CourseCard";
 import SkillTag from "../../components/skills/SkillTag";
 import AddSkillInput from "../../components/skills/AddSkillInput";
-import { Skeleton } from "../../components/ui/LoadingSkeleton";
+import  Skeleton  from "../../components/ui/LoadingSkeleton";
 import { useSkillGap, useUserSkills } from "../../hooks/useSkillGap";
 import { useMatchedJobs } from "../../hooks/useMatchedJobs";
 import { useAuth } from "../../context/AuthContext";

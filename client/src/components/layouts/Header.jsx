@@ -3,6 +3,7 @@ import { Bell, Menu } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import ThemeToggle from "../ui/ThemeToggle";
 import ProfileDropdown from "./ProfileDropdown";
+import NotificationPanel from "./NotificationPanel"
 
 function getGreeting(name) {
   const hour = new Date().getHours();
@@ -45,7 +46,7 @@ export default function Header({ onSearch, onOpenMenu }) {
       <div className="flex items-center gap-2 ml-auto shrink-0">
         <ThemeToggle className={`${iconBtn} !p-0`} />
 
-        <button
+        {/* <button
           type="button"
           aria-label="Notifications"
           className={`${iconBtn} relative bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100`}
@@ -54,7 +55,8 @@ export default function Header({ onSearch, onOpenMenu }) {
           {hasNotif && (
             <span className="absolute top-2 right-2 w-2 h-2 bg-blue-600 rounded-full ring-2 ring-white dark:ring-slate-900" />
           )}
-        </button>
+        </button> */}
+        <NotificationPanel/>
 
         <ProfileDropdown />
       </div>

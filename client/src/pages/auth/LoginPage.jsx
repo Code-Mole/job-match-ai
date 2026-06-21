@@ -194,6 +194,12 @@ export default function LoginPage() {
             )}
           </button>
         </form>
+        <Link
+          to="/forgot-password"
+          className=" text-xs text-blue-600 dark:text-blue-400 hover:underline"
+        >
+          Forgot password?
+        </Link>
 
         {/* Divider */}
         <div className="flex items-center gap-3 my-5">
@@ -206,7 +212,9 @@ export default function LoginPage() {
         <div className="grid grid-cols-2 gap-3">
           <button
             type="button"
-            onClick={() => { window.location.href = `${API_BASE}/api/auth/google`; }}
+            onClick={() => {
+              window.location.href = `${API_BASE}/api/auth/google`;
+            }}
             className="
             flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-sm font-medium
             bg-white border border-slate-200 text-slate-700
@@ -218,7 +226,9 @@ export default function LoginPage() {
           </button>
           <button
             type="button"
-            onClick={() => { window.location.href = `${API_BASE}/api/auth/linkedin`; }}
+            onClick={() => {
+              window.location.href = `${API_BASE}/api/auth/linkedin`;
+            }}
             className="
             flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-sm font-medium
             bg-white border border-slate-200 text-slate-700

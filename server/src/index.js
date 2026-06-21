@@ -7,6 +7,7 @@ import connectDB from "./config/db.js";
 import { errorHandler, notFound } from "./middleware/errorHandler.js";
 import adminRoutes from "./routes/admin/index.js";
 import notificationsRoutes from "./routes/notifications.js";
+import applicationRoutes from "./routes/applications.js";
 import feedbackRoutes from "./routes/feedback.js";
 
 // Route imports
@@ -78,6 +79,7 @@ app.use("/api/cv", cvRoutes);
 app.use("/api/ai", aiRoutes);
 app.use("/api/notifications", notificationsRoutes);
 app.use("/api/admin", adminRoutes);
+app.use("/api/applications", applicationRoutes);
 app.use("/api/feedback", feedbackRoutes);
 // ── 404 + error handlers ──────────────────────────────────────────────────────
 // notFound must come after all routes

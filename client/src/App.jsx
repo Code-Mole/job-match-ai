@@ -20,6 +20,9 @@ import AdminJobsPage from "./pages/admin/AdminJobsPage";
 import AdminUsersPage from "./pages/admin/AdminUsersPage";
 import AdminJobFormPage from "./pages/admin/AdminJobFormPage";
 import AdminBulkImportPage from "./pages/admin/AdminBulkImportPage";
+import ApplicationsPage from "./pages/applications/ApplicationsPage";
+import ForgotPasswordPage from './pages/forgetpassword/ForgotPasswordPage'
+import ResetPasswordPage  from './pages/forgetpassword/ResetPasswordPage'
 
 function ProtectedRoute() {
   const { user, loading } = useAuth();
@@ -48,10 +51,13 @@ export default function App() {
       <Route path="/login" element={<LoginPage />} />
       <Route path="/signup" element={<SignupPage />} />
       <Route path="/auth/callback" element={<AuthCallbackPage />} />
+      <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+      <Route path="/reset-password/:token" element={<ResetPasswordPage />} />
 
       <Route element={<ProtectedRoute />}>
         <Route element={<ProtectedLayout />}>
           <Route path="/dashboard" element={<DashboardPage />} />
+          <Route path="applications" element={<ApplicationsPage />} />
           <Route path="jobs" element={<JobsPage />} />
           <Route
             path="jobs/applied"

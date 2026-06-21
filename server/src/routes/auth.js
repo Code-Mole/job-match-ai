@@ -10,6 +10,7 @@ import {
   verifySmtpConnection,
   sendMail,
   sendJobMatchesEmail,
+  sendPasswordResetEmail
 } from "../utils/email.js";
 import { loadFilteredJobs, scoreJobsForUser } from "../utils/jobMatchHelper.js";
 import { buildCareerInsights } from "../services/careerInsightsService.js";
@@ -20,6 +21,8 @@ import {
   handleLinkedInCallback,
   oauthRedirectWithToken,
 } from "../utils/oauth.js";
+import crypto from "crypto";
+
 
 const router = express.Router();
 const CLIENT_URL = process.env.CLIENT_URL || "http://localhost:5173";
@@ -468,6 +471,72 @@ router.post("/bootstrap-admin", async (req, res, next) => {
   } catch (err) {
     next(err);
   }
+});
+
+// ── POST /api/auth/forgot-password ──────────────────────────────────────────
+router.post('/forgot-password', async (req, res, next) => {
+  try {
+    const { email } = req.body
+    if (!email) return res.status(400).json({ message: 'Email is required.' })
+
+    const user = await User.findOne({ email: email.toLowerCase().trim() })
+
+    // Always return the same response whether or not the email exists —
+    // prevents account enumeration via this endpoint.
+    const genericResponse = { success: true, message: 'If an account exists with that email, a reset link has been sent.' }
+
+    if (!user) return res.json(genericResponse)
+
+    const rawToken = crypto.randomBytes(32).toString('hex')
+    const hashedToken = crypto.createHash('sha256').update(rawToken).digest('hex')
+
+    user.resetPasswordToken   = hashedToken
+    user.resetPasswordExpires = Date.now() + 60 * 60 * 1000 // 1 hour
+    await user.save()
+
+    const resetUrl = `${process.env.CLIENT_URL}/reset-password/${rawToken}`
+
+    try {
+      await sendPasswordResetEmail(user.email, resetUrl)
+    } catch (mailErr) {
+      console.error('Failed to send reset email:', mailErr.message)
+      // Roll back the token so a broken email setup doesn't leave a dangling reset window
+      user.resetPasswordToken   = null
+      user.resetPasswordExpires = null
+      await user.save()
+      return res.status(500).json({ success: false, message: 'Failed to send reset email. Please try again later.' })
+    }
+
+    res.json(genericResponse)
+  } catch (err) { next(err) }
+})
+
+// ── POST /api/auth/reset-password/:token ────────────────────────────────────
+router.post('/reset-password/:token', async (req, res, next) => {
+  try {
+    const { password } = req.body
+    if (!password || password.length < 8) {
+      return res.status(400).json({ message: 'Password must be at least 8 characters.' })
+    }
+
+    const hashedToken = crypto.createHash('sha256').update(req.params.token).digest('hex')
+
+    const user = await User.findOne({
+      resetPasswordToken: hashedToken,
+      resetPasswordExpires: { $gt: Date.now() },
+    })
+
+    if (!user) {
+      return res.status(400).json({ message: 'This reset link is invalid or has expired.' })
+    }
+
+    user.password = password // pre-save hook hashes it
+    user.resetPasswordToken   = null
+    user.resetPasswordExpires = null
+    await user.save()
+
+    res.json({ success: true, message: 'Password reset successfully. You can now log in.' })
+  } catch (err) { next(err) }
 });
 
 export default router;

@@ -112,6 +112,7 @@ export async function sendJobMatchesEmail(user, matches = []) {
     `,
     text: "Your personalized job matches are ready on JobMatch AI.",
   });
+
 }
 
 export async function sendApplicationEmail(user, job) {
@@ -136,3 +137,23 @@ export async function sendApplicationEmail(user, job) {
     `,
   });
 }
+
+export async function sendPasswordResetEmail(to, resetUrl) {
+  return sendMail({
+    from: `"JobMatch AI" <${process.env.SMTP_USER}>`,
+    to,
+    subject: 'Reset your JobMatch AI password',
+    html: `
+      <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto;">
+        <h2 style="color: #2563EB;">Reset your password</h2>
+        <p>We received a request to reset your JobMatch AI password. Click the button below to choose a new one. This link expires in 1 hour.</p>
+        <a href="${resetUrl}" style="display:inline-block; background:#2563EB; color:#fff; padding:12px 24px; border-radius:10px; text-decoration:none; font-weight:600; margin: 16px 0;">
+          Reset password
+        </a>
+        <p style="color:#64748B; font-size:13px;">If you didn't request this, you can safely ignore this email — your password will remain unchanged.</p>
+        <p style="color:#94A3B8; font-size:12px;">If the button doesn't work, copy this link: ${resetUrl}</p>
+      </div>
+    `,
+  });
+}
+

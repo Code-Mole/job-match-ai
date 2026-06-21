@@ -17,6 +17,7 @@ import { useSkillGap, useUserSkills } from "../../hooks/useSkillGap";
 import { useMatchedJobs } from "../../hooks/useMatchedJobs";
 import { useAuth } from "../../context/AuthContext";
 import { SKILL_GROUPS } from "../../data/skillsData";
+import FeedbackWidget from "../../components/ui/FeedbackWidget";
 
 // ── Loading skeleton for the gap analysis panel ───────────────────────────────
 function GapSkeleton() {
@@ -137,7 +138,9 @@ function GapAnalysisTab() {
                 jobList.map((job) => (
                   <option key={job._id} value={job._id}>
                     {job.title} — {job.company}
-                    {job.match_score != null ? ` (${job.match_score}% match)` : ""}
+                    {job.match_score != null
+                      ? ` (${job.match_score}% match)`
+                      : ""}
                   </option>
                 ))
               )}
@@ -203,7 +206,9 @@ function GapAnalysisTab() {
                   : `${matchedSkills.length} of ${matchedSkills.length + missingSkills.length} skills matched`
               }
             />
-            <ScoreBreakdown scores={gap?.component_scores || selectedJob?.component_scores} />
+            <ScoreBreakdown
+              scores={gap?.component_scores || selectedJob?.component_scores}
+            />
           </div>
 
           {/* ── Right: skill bars ────────────────────── */}
@@ -245,6 +250,16 @@ function GapAnalysisTab() {
               </div>
             )}
           </div>
+        </div>
+      )}
+      {/* Feedback */}
+      {selectedJobId && (
+        <div className="mt-5 pt-4 border-t border-slate-100 dark:border-white/5">
+          <FeedbackWidget
+            type="skill_gap"
+            referenceId={selectedJobId}
+            prompt="Was this skill gap analysis useful?"
+          />
         </div>
       )}
     </div>

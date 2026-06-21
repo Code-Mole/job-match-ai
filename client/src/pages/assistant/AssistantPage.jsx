@@ -5,6 +5,7 @@ import TypingIndicator from "../../components/assistant/TypingIndicator";
 import PromptChip from "../../components/assistant/PromptChip";
 import { useChat, SUGGESTED_PROMPTS } from "../../hooks/useChat";
 import Footer from "../../components/layouts/Footer";
+import FeedbackWidget from "../../components/ui/FeedbackWidget";
 
 export default function AssistantPage() {
   const { messages, loading, error, sendMessage, clearChat } = useChat();
@@ -32,93 +33,106 @@ export default function AssistantPage() {
   };
 
   return (
-      <div className="flex flex-col min-h-[calc(100dvh-5rem)] max-w-4xl mx-auto px-3 sm:px-4 py-4 sm:py-6">
-        {/* ── Page header ──────────────────────────── */}
-        <div className="flex flex-col gap-4 mb-6 sm:flex-row sm:items-start sm:justify-between sm:gap-4 flex-shrink-0 px-1">
-          <div className="flex items-start gap-3 sm:gap-4 min-w-0">
-            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center flex-shrink-0">
-              <Sparkles size={20} className="text-white sm:hidden" />
-              <Sparkles size={22} className="text-white hidden sm:block" />
-            </div>
-            <div className="min-w-0">
-              <h1 className="font-display font-bold text-2xl sm:text-3xl text-slate-900 dark:text-slate-50 mb-1">
-                AI Career Assistant
-              </h1>
-              <p className="text-slate-500 dark:text-slate-400 text-sm">
-                Powered by ChatGPT, Grok, or Claude — configure API keys on the
-                server. Ask about any sector or career move.
+    <div className="flex flex-col min-h-[calc(100dvh-5rem)] max-w-4xl mx-auto px-3 sm:px-4 py-4 sm:py-6">
+      {/* ── Page header ──────────────────────────── */}
+      <div className="flex flex-col gap-4 mb-6 sm:flex-row sm:items-start sm:justify-between sm:gap-4 flex-shrink-0 px-1">
+        <div className="flex items-start gap-3 sm:gap-4 min-w-0">
+          <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center flex-shrink-0">
+            <Sparkles size={20} className="text-white sm:hidden" />
+            <Sparkles size={22} className="text-white hidden sm:block" />
+          </div>
+          <div className="min-w-0">
+            <h1 className="font-display font-bold text-2xl sm:text-3xl text-slate-900 dark:text-slate-50 mb-1">
+              AI Career Assistant
+            </h1>
+            <p className="text-slate-500 dark:text-slate-400 text-sm">
+              Powered by ChatGPT, Grok, or Claude — configure API keys on the
+              server. Ask about any sector or career move.
+            </p>
+          </div>
+        </div>
+        <button
+          onClick={clearChat}
+          className="flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-sm text-slate-500 dark:text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 border border-slate-200 dark:border-white/10 transition-all w-full sm:w-auto shrink-0"
+        >
+          <Trash2 size={14} /> Clear chat
+        </button>
+      </div>
+
+      {/* ── Chat window ──────────────────────────── */}
+      <div className="flex-1 flex flex-col bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-white/8 overflow-hidden min-h-[min(70vh,36rem)]">
+        {/* Messages area */}
+        <div className="flex-1 overflow-y-auto p-6 space-y-5">
+          {messages.length === 0 && (
+            <div className="flex flex-col items-center justify-center h-full text-center py-12">
+              <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center mb-4">
+                <MessageSquare size={28} className="text-white" />
+              </div>
+              <h3 className="font-display font-bold text-xl text-slate-900 dark:text-slate-100 mb-2">
+                Start a conversation
+              </h3>
+              <p className="text-sm text-slate-500 dark:text-slate-400 max-w-xs">
+                Ask me about job matches, skill gaps, career paths, or salary
+                information.
               </p>
             </div>
-          </div>
-          <button
-            onClick={clearChat}
-            className="flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-sm text-slate-500 dark:text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 border border-slate-200 dark:border-white/10 transition-all w-full sm:w-auto shrink-0"
-          >
-            <Trash2 size={14} /> Clear chat
-          </button>
+          )}
+
+          {messages.map((msg, i) => (
+            <div key={msg.id || i}>
+              <MessageBubble message={msg} />
+
+              {/* Feedback only for completed assistant messages */}
+              {msg.role === "assistant" && !msg.streaming && (
+                <div className="mt-1.5 ml-1">
+                  <FeedbackWidget
+                    type="chat"
+                    referenceId={msg.id}
+                    prompt="Helpful response?"
+                  />
+                </div>
+              )}
+            </div>
+          ))}
+
+          {loading && <TypingIndicator />}
+
+          {error && (
+            <div className="text-center text-sm text-red-500 dark:text-red-400 py-2">
+              {error}
+            </div>
+          )}
+
+          <div ref={bottomRef} />
         </div>
 
-        {/* ── Chat window ──────────────────────────── */}
-        <div className="flex-1 flex flex-col bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-white/8 overflow-hidden min-h-[min(70vh,36rem)]">
-          {/* Messages area */}
-          <div className="flex-1 overflow-y-auto p-6 space-y-5">
-            {messages.length === 0 && (
-              <div className="flex flex-col items-center justify-center h-full text-center py-12">
-                <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center mb-4">
-                  <MessageSquare size={28} className="text-white" />
-                </div>
-                <h3 className="font-display font-bold text-xl text-slate-900 dark:text-slate-100 mb-2">
-                  Start a conversation
-                </h3>
-                <p className="text-sm text-slate-500 dark:text-slate-400 max-w-xs">
-                  Ask me about job matches, skill gaps, career paths, or salary
-                  information.
-                </p>
-              </div>
-            )}
-
-            {messages.map((msg) => (
-              <MessageBubble key={msg.id} message={msg} />
+        {/* Suggested prompts */}
+        <div className="px-4 py-3 border-t border-slate-100 dark:border-white/5 overflow-x-auto">
+          <div className="flex gap-2 min-w-max">
+            {SUGGESTED_PROMPTS.map((prompt) => (
+              <PromptChip
+                key={prompt.id}
+                prompt={prompt}
+                onClick={sendMessage}
+                disabled={loading}
+              />
             ))}
-
-            {loading && <TypingIndicator />}
-
-            {error && (
-              <div className="text-center text-sm text-red-500 dark:text-red-400 py-2">
-                {error}
-              </div>
-            )}
-
-            <div ref={bottomRef} />
           </div>
+        </div>
 
-          {/* Suggested prompts */}
-          <div className="px-4 py-3 border-t border-slate-100 dark:border-white/5 overflow-x-auto">
-            <div className="flex gap-2 min-w-max">
-              {SUGGESTED_PROMPTS.map((prompt) => (
-                <PromptChip
-                  key={prompt.id}
-                  prompt={prompt}
-                  onClick={sendMessage}
-                  disabled={loading}
-                />
-              ))}
-            </div>
-          </div>
-
-          {/* Input row */}
-          <div className="px-4 pb-4 pt-2 border-t border-slate-100 dark:border-white/5">
-            <div className="flex gap-3 items-end">
-              <div className="flex-1 relative">
-                <textarea
-                  ref={inputRef}
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  onKeyDown={handleKeyDown}
-                  placeholder="Ask anything about your career… (Enter to send)"
-                  disabled={loading}
-                  rows={1}
-                  className="
+        {/* Input row */}
+        <div className="px-4 pb-4 pt-2 border-t border-slate-100 dark:border-white/5">
+          <div className="flex gap-3 items-end">
+            <div className="flex-1 relative">
+              <textarea
+                ref={inputRef}
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={handleKeyDown}
+                placeholder="Ask anything about your career… (Enter to send)"
+                disabled={loading}
+                rows={1}
+                className="
                     w-full px-4 py-3 rounded-xl text-sm resize-none
                     bg-slate-100 dark:bg-slate-800
                     border border-slate-200 dark:border-white/8
@@ -128,38 +142,38 @@ export default function AssistantPage() {
                     transition-all disabled:opacity-60
                     max-h-32 overflow-y-auto
                   "
-                  style={{ lineHeight: "1.5" }}
-                  onInput={(e) => {
-                    // Auto-grow textarea
-                    e.target.style.height = "auto";
-                    e.target.style.height = `${Math.min(e.target.scrollHeight, 128)}px`;
-                  }}
-                />
-              </div>
+                style={{ lineHeight: "1.5" }}
+                onInput={(e) => {
+                  // Auto-grow textarea
+                  e.target.style.height = "auto";
+                  e.target.style.height = `${Math.min(e.target.scrollHeight, 128)}px`;
+                }}
+              />
+            </div>
 
-              <button
-                onClick={handleSend}
-                disabled={!input.trim() || loading}
-                className="
+            <button
+              onClick={handleSend}
+              disabled={!input.trim() || loading}
+              className="
                   w-11 h-11 rounded-xl bg-blue-600 hover:bg-blue-700
                   disabled:opacity-50 disabled:cursor-not-allowed
                   flex items-center justify-center flex-shrink-0
                   transition-all active:scale-95 shadow-lg shadow-blue-500/25
                 "
-              >
-                {loading ? (
-                  <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                ) : (
-                  <Send size={16} className="text-white" />
-                )}
-              </button>
-            </div>
-            <p className="text-xs text-slate-400 dark:text-slate-500 mt-2 text-center">
-              Press Enter to send · Shift+Enter for new line
-            </p>
+            >
+              {loading ? (
+                <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+              ) : (
+                <Send size={16} className="text-white" />
+              )}
+            </button>
           </div>
+          <p className="text-xs text-slate-400 dark:text-slate-500 mt-2 text-center">
+            Press Enter to send · Shift+Enter for new line
+          </p>
         </div>
-        <Footer />
       </div>
+      <Footer />
+    </div>
   );
 }

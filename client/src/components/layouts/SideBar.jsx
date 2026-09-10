@@ -7,6 +7,7 @@ import {
   MessageSquare,
   LogOut,
   Settings,
+  BriefcaseBusiness
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 
@@ -16,6 +17,7 @@ const NAV_ITEMS = [
   { path: "/jobs", icon: Briefcase, label: "Jobs" },
   { path: "/careers", icon: TrendingUp, label: "Careers" },
   { path: "/skills", icon: Zap, label: "Skills" },
+  { path: "/applications", icon: BriefcaseBusiness, label: "My Applications" },
   { path: "/assistant", icon: MessageSquare, label: "AI Assistant" },
   // { path: "/settings", icon: Settings, label: "Settings" },
 ];

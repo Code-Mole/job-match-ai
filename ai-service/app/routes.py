@@ -1,5 +1,363 @@
+# """
+# Flask route definitions — all API endpoints for the AI service.
+# """
+
+# import os
+# import logging
+# import tempfile
+# from flask import Blueprint, request, jsonify
+
+# from .matcher    import get_matcher, JobMatcher
+# from .cv_parser  import parse_cv, extract_skills_from_text
+# from .cv_skill_extractor import extract_skills_from_cv_text, build_matching_skills
+# from .skill_gap  import analyse_skill_gap
+# from .skill_ontology import normalize_skills_list
+
+# logger  = logging.getLogger(__name__)
+# bp      = Blueprint("api", __name__)
+# matcher = get_matcher()  # Singleton
+
+# # Sample jobs — loaded at startup (Step 5 will fetch from MongoDB instead)
+# SAMPLE_JOBS = [
+#     {
+#         "_id": "1", "title": "Senior Frontend Developer", "company": "Stripe",
+#         "location": "Remote", "type": "Full-time", "remote": True,
+#         "salaryMin": 120000, "salaryMax": 150000, "salary": "$120k–$150k",
+#         "level": "Senior", "yearsExp": 5, "industry": "Fintech", "featured": True,
+#         "demandTrend": "Increasing",
+#         "description": "Build and maintain Stripe's web applications used by millions of businesses. Work with React, TypeScript, and GraphQL at scale.",
+#         "requirements": ["5+ years React", "TypeScript", "GraphQL", "Testing"],
+#         "skills": ["React", "TypeScript", "JavaScript", "CSS", "GraphQL", "Jest", "REST APIs"],
+#     },
+#     {
+#         "_id": "2", "title": "Full Stack Engineer", "company": "Vercel",
+#         "location": "San Francisco, CA", "type": "Full-time", "remote": False,
+#         "salaryMin": 130000, "salaryMax": 160000, "salary": "$130k–$160k",
+#         "level": "Mid", "yearsExp": 3, "industry": "Developer Tools", "featured": False,
+#         "demandTrend": "Increasing",
+#         "description": "Join Vercel to build the future of web development. Work on deployment platform, edge network, and developer tooling.",
+#         "requirements": ["React", "Next.js", "Node.js", "PostgreSQL"],
+#         "skills": ["React", "Next.js", "Node.js", "PostgreSQL", "TypeScript", "AWS", "Docker"],
+#     },
+#     {
+#         "_id": "3", "title": "React Developer", "company": "Linear",
+#         "location": "Remote", "type": "Full-time", "remote": True,
+#         "salaryMin": 110000, "salaryMax": 140000, "salary": "$110k–$140k",
+#         "level": "Mid", "yearsExp": 3, "industry": "Productivity Software", "featured": False,
+#         "demandTrend": "Stable",
+#         "description": "Build performant React components for Linear's project management platform used by thousands of teams.",
+#         "requirements": ["React", "GraphQL", "TypeScript", "Testing"],
+#         "skills": ["React", "GraphQL", "TypeScript", "CSS", "Jest"],
+#     },
+#     {
+#         "_id": "4", "title": "UI Engineer", "company": "Figma",
+#         "location": "New York, NY", "type": "Full-time", "remote": False,
+#         "salaryMin": 125000, "salaryMax": 155000, "salary": "$125k–$155k",
+#         "level": "Mid", "yearsExp": 4, "industry": "Design Software", "featured": False,
+#         "demandTrend": "Stable",
+#         "description": "Work on Figma's complex canvas, properties panel and plugin ecosystem. Deep JavaScript and WebGL experience required.",
+#         "requirements": ["JavaScript", "TypeScript", "React", "WebGL"],
+#         "skills": ["JavaScript", "TypeScript", "React", "WebGL", "CSS"],
+#     },
+#     {
+#         "_id": "5", "title": "Backend Engineer", "company": "PlanetScale",
+#         "location": "Remote", "type": "Full-time", "remote": True,
+#         "salaryMin": 140000, "salaryMax": 180000, "salary": "$140k–$180k",
+#         "level": "Senior", "yearsExp": 6, "industry": "Database", "featured": False,
+#         "demandTrend": "Increasing",
+#         "description": "Build the infrastructure and APIs that power PlanetScale's database-as-a-service product at scale.",
+#         "requirements": ["Go", "MySQL", "Kubernetes", "Distributed Systems"],
+#         "skills": ["Go", "MySQL", "Kubernetes", "Docker", "REST APIs", "Linux"],
+#     },
+#     {
+#         "_id": "6", "title": "Machine Learning Engineer", "company": "Hugging Face",
+#         "location": "Remote", "type": "Full-time", "remote": True,
+#         "salaryMin": 150000, "salaryMax": 200000, "salary": "$150k–$200k",
+#         "level": "Senior", "yearsExp": 4, "industry": "AI/ML", "featured": True,
+#         "demandTrend": "Increasing",
+#         "description": "Work on open-source ML tools, models and infrastructure used by millions of researchers and developers worldwide.",
+#         "requirements": ["Python", "PyTorch", "NLP", "Deep Learning"],
+#         "skills": ["Python", "PyTorch", "NLP", "Machine Learning", "Deep Learning", "Docker"],
+#     },
+# ]
+
+# # Fit the matcher with the sample jobs at startup
+# matcher.fit(SAMPLE_JOBS)
+# logger.info("Matcher fitted with sample jobs at startup.")
+
+
+# # ── GET /health ───────────────────────────────────────────────────────────────
+# @bp.route("/health", methods=["GET"])
+# def health():
+#     return jsonify({
+#         "status":       "ok",
+#         "service":      "JobMatch AI Service",
+#         "jobs_loaded":  len(SAMPLE_JOBS),
+#         "matcher_ready": matcher._is_fitted,
+#     })
+
+
+# # ── POST /match ───────────────────────────────────────────────────────────────
+# @bp.route("/match", methods=["POST"])
+# def match_jobs():
+#     """
+#     Score a user's skills and CV text against all loaded jobs.
+
+#     Request body:
+#         {
+#             "skills":     ["React", "TypeScript", ...],
+#             "cv_text":    "Raw CV text...",
+#             "years_exp":  3,
+#             "top_n":      10
+#         }
+
+#     Response:
+#         {
+#             "matches": [
+#                 {
+#                     "job": {...},
+#                     "match_score": 87,
+#                     "component_scores": {...},
+#                     "matched_skills": [...],
+#                     "missing_skills": [...]
+#                 },
+#                 ...
+#             ]
+#         }
+#     """
+#     data = request.get_json(silent=True) or {}
+
+#     user_skills = data.get("skills", [])
+#     cv_text     = data.get("cv_text", "")
+#     years_exp   = int(data.get("years_exp", 0))
+#     top_n       = int(data.get("top_n", 20))
+#     strengths   = data.get("strengths") or {}
+#     cv_roles    = data.get("cv_roles") or []
+#     jobs_batch  = data.get("jobs") or []
+
+#     # Isolated matcher per request — no shared mutable state between users
+#     active_matcher = JobMatcher()
+#     if jobs_batch:
+#         active_matcher.fit(jobs_batch)
+#     elif matcher._is_fitted:
+#         active_matcher.fit(matcher.jobs_data)
+#     else:
+#         return jsonify({"error": "No jobs loaded. Provide jobs array."}), 400
+
+#     # Normalize incoming skills; merge explicit + inferred from experience
+#     user_skills = normalize_skills_list(user_skills)
+#     if cv_text:
+#         user_skills, inferred = build_matching_skills(user_skills, cv_text, cv_roles)
+#     else:
+#         inferred = []
+
+#     if not user_skills and not cv_text:
+#         return jsonify({"error": "Provide at least one of: skills, cv_text"}), 400
+
+#     logger.info(
+#         "Match request: %d skills (%d inferred), cv_len=%d, roles=%d, jobs=%d",
+#         len(user_skills),
+#         len(inferred),
+#         len(cv_text or ""),
+#         len(cv_roles),
+#         len(active_matcher.jobs_data),
+#     )
+
+#     try:
+#         matches = active_matcher.match(
+#             user_skills=user_skills,
+#             cv_text=cv_text,
+#             years_exp=years_exp,
+#             top_n=top_n,
+#             strengths=strengths,
+#             cv_roles=cv_roles,
+#         )
+
+#         # Clean up response — remove raw job object, add id field
+#         response_matches = []
+#         for m in matches:
+#             job = m["job"]
+#             response_matches.append({
+#                 "job_id":          job.get("_id"),
+#                 "title":           job.get("title"),
+#                 "company":         job.get("company"),
+#                 "location":        job.get("location"),
+#                 "salary":          job.get("salary"),
+#                 "type":            job.get("type"),
+#                 "remote":          job.get("remote"),
+#                 "level":           job.get("level"),
+#                 "industry":        job.get("industry"),
+#                 "match_score":     m["match_score"],
+#                 "component_scores": m["component_scores"],
+#                 "matched_skills":  m["matched_skills"],
+#                 "missing_skills":  m["missing_skills"],
+#                 "match_factors":   m.get("match_factors", []),
+#                 "match_summary":   m.get("match_summary", ""),
+#             })
+
+#         return jsonify({
+#             "success": True,
+#             "matches": response_matches,
+#             "total": len(response_matches),
+#             "profile_skills": user_skills,
+#             "inferred_skills": inferred,
+#         })
+
+#     except Exception as e:
+#         logger.error(f"/match error: {e}", exc_info=True)
+#         return jsonify({"error": str(e)}), 500
+
+
+# # ── POST /parse-cv ────────────────────────────────────────────────────────────
+# @bp.route("/parse-cv", methods=["POST"])
+# def parse_cv_endpoint():
+#     """
+#     Accept a CV file upload, extract text and skills.
+
+#     Request: multipart/form-data with field 'file'
+
+#     Response:
+#         {
+#             "skills":          ["React", "TypeScript", ...],
+#             "years_experience": 4,
+#             "word_count":       650,
+#             "raw_text_preview": "First 300 chars..."
+#         }
+#     """
+#     if "file" not in request.files:
+#         return jsonify({"error": "No file provided. Use field name 'file'."}), 400
+
+#     file = request.files["file"]
+#     if file.filename == "":
+#         return jsonify({"error": "Empty filename."}), 400
+
+#     # Save to a temp file — parse it — delete it
+#     suffix = os.path.splitext(file.filename)[1].lower()
+#     try:
+#         with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+#             file.save(tmp.name)
+#             tmp_path = tmp.name
+
+#         result = parse_cv(tmp_path)
+
+#     finally:
+#         try:
+#             os.unlink(tmp_path)
+#         except Exception:
+#             pass
+
+#     if not result["success"]:
+#         return jsonify({"error": result.get("error", "Parsing failed")}), 500
+
+#     raw = result.get("raw_text", "")
+#     logger.info(
+#         "CV parsed: %d skills (%d explicit, %d inferred), %d roles",
+#         len(result["skills"]),
+#         len(result.get("explicit_skills", [])),
+#         len(result.get("inferred_skills", [])),
+#         len(result.get("roles", [])),
+#     )
+
+#     return jsonify({
+#         "success":          True,
+#         "skills":           result["skills"],
+#         "explicit_skills":  result.get("explicit_skills", result["skills"]),
+#         "inferred_skills":  result.get("inferred_skills", []),
+#         "roles":            result.get("roles", []),
+#         "strengths":        result.get("strengths", {}),
+#         "years_experience": result["years_experience"],
+#         "word_count":       result["word_count"],
+#         "raw_text":         raw[:12000],
+#         "raw_text_preview": raw[:300] + "..." if len(raw) > 300 else raw,
+#     })
+
+
+# # ── POST /parse-text ──────────────────────────────────────────────────────────
+# @bp.route("/parse-text", methods=["POST"])
+# def parse_text_endpoint():
+#     """
+#     Extract skills from plain text (no file upload required).
+#     Useful for LinkedIn import or manual text paste.
+
+#     Request body: { "text": "raw text..." }
+#     """
+#     data = request.get_json(silent=True) or {}
+#     text = data.get("text", "")
+
+#     if not text:
+#         return jsonify({"error": "Provide 'text' field in request body."}), 400
+
+#     skills = extract_skills_from_text(text)
+#     return jsonify({"success": True, "skills": skills, "count": len(skills)})
+
+
+# # ── POST /skill-gap ───────────────────────────────────────────────────────────
+# @bp.route("/skill-gap", methods=["POST"])
+# def skill_gap_endpoint():
+#     """
+#     Analyse skill gap between user and a specific job.
+
+#     Request body:
+#         {
+#             "user_skills": ["React", "JavaScript"],
+#             "job_id":      "1"           (optional — uses job from loaded list)
+#             "job":         {...}          (optional — provide full job object)
+#         }
+#     """
+#     data = request.get_json(silent=True) or {}
+
+#     user_skills = normalize_skills_list(data.get("user_skills", []))
+#     job_id      = data.get("job_id")
+#     job_data    = data.get("job")
+
+#     # Resolve the job — either from provided object or our sample list
+#     if job_data:
+#         job = job_data
+#     elif job_id:
+#         job = next((j for j in SAMPLE_JOBS if str(j.get("_id")) == str(job_id)), None)
+#         if not job:
+#             return jsonify({"error": f"Job {job_id} not found."}), 404
+#     else:
+#         return jsonify({"error": "Provide 'job_id' or 'job' object."}), 400
+
+#     try:
+#         analysis = analyse_skill_gap(user_skills, job)
+#         return jsonify({"success": True, **analysis})
+#     except Exception as e:
+#         logger.error(f"/skill-gap error: {e}", exc_info=True)
+#         return jsonify({"error": str(e)}), 500
+
+
+# # ── POST /load-jobs ───────────────────────────────────────────────────────────
+# @bp.route("/load-jobs", methods=["POST"])
+# def load_jobs():
+#     """
+#     Replace the in-memory job list with a new set and refit the TF-IDF model.
+#     Called by the Express backend after jobs are updated in MongoDB (Step 5).
+
+#     Request body: { "jobs": [...] }
+#     """
+#     global SAMPLE_JOBS
+#     data = request.get_json(silent=True) or {}
+#     jobs = data.get("jobs", [])
+
+#     if not jobs:
+#         return jsonify({"error": "Provide 'jobs' array."}), 400
+
+#     SAMPLE_JOBS = jobs
+#     matcher.fit(jobs)
+
+#     return jsonify({
+#         "success":      True,
+#         "message":      f"Matcher reloaded with {len(jobs)} jobs.",
+#         "jobs_loaded":  len(jobs),
+#     })
+
+
 """
-Flask route definitions — all API endpoints for the AI service.
+routes.py  —  Flask API endpoints for the AI service
+=====================================================
+All endpoints work for every industry, not just tech.
 """
 
 import os
@@ -7,144 +365,77 @@ import logging
 import tempfile
 from flask import Blueprint, request, jsonify
 
-from .matcher    import get_matcher, JobMatcher
-from .cv_parser  import parse_cv, extract_skills_from_text
-from .cv_skill_extractor import extract_skills_from_cv_text, build_matching_skills
-from .skill_gap  import analyse_skill_gap
-from .skill_ontology import normalize_skills_list
+from .matcher         import get_matcher, JobMatcher
+from .cv_parser       import parse_cv, extract_skills_from_text
+from .cv_skill_extractor import (
+    extract_skills_from_cv_text,
+    build_matching_skills,
+    extract_cv_profile,
+)
+from .skill_gap       import analyse_skill_gap
+from .skill_ontology  import normalize_skills_list
 
 logger  = logging.getLogger(__name__)
 bp      = Blueprint("api", __name__)
-matcher = get_matcher()  # Singleton
 
-# Sample jobs — loaded at startup (Step 5 will fetch from MongoDB instead)
-SAMPLE_JOBS = [
-    {
-        "_id": "1", "title": "Senior Frontend Developer", "company": "Stripe",
-        "location": "Remote", "type": "Full-time", "remote": True,
-        "salaryMin": 120000, "salaryMax": 150000, "salary": "$120k–$150k",
-        "level": "Senior", "yearsExp": 5, "industry": "Fintech", "featured": True,
-        "demandTrend": "Increasing",
-        "description": "Build and maintain Stripe's web applications used by millions of businesses. Work with React, TypeScript, and GraphQL at scale.",
-        "requirements": ["5+ years React", "TypeScript", "GraphQL", "Testing"],
-        "skills": ["React", "TypeScript", "JavaScript", "CSS", "GraphQL", "Jest", "REST APIs"],
-    },
-    {
-        "_id": "2", "title": "Full Stack Engineer", "company": "Vercel",
-        "location": "San Francisco, CA", "type": "Full-time", "remote": False,
-        "salaryMin": 130000, "salaryMax": 160000, "salary": "$130k–$160k",
-        "level": "Mid", "yearsExp": 3, "industry": "Developer Tools", "featured": False,
-        "demandTrend": "Increasing",
-        "description": "Join Vercel to build the future of web development. Work on deployment platform, edge network, and developer tooling.",
-        "requirements": ["React", "Next.js", "Node.js", "PostgreSQL"],
-        "skills": ["React", "Next.js", "Node.js", "PostgreSQL", "TypeScript", "AWS", "Docker"],
-    },
-    {
-        "_id": "3", "title": "React Developer", "company": "Linear",
-        "location": "Remote", "type": "Full-time", "remote": True,
-        "salaryMin": 110000, "salaryMax": 140000, "salary": "$110k–$140k",
-        "level": "Mid", "yearsExp": 3, "industry": "Productivity Software", "featured": False,
-        "demandTrend": "Stable",
-        "description": "Build performant React components for Linear's project management platform used by thousands of teams.",
-        "requirements": ["React", "GraphQL", "TypeScript", "Testing"],
-        "skills": ["React", "GraphQL", "TypeScript", "CSS", "Jest"],
-    },
-    {
-        "_id": "4", "title": "UI Engineer", "company": "Figma",
-        "location": "New York, NY", "type": "Full-time", "remote": False,
-        "salaryMin": 125000, "salaryMax": 155000, "salary": "$125k–$155k",
-        "level": "Mid", "yearsExp": 4, "industry": "Design Software", "featured": False,
-        "demandTrend": "Stable",
-        "description": "Work on Figma's complex canvas, properties panel and plugin ecosystem. Deep JavaScript and WebGL experience required.",
-        "requirements": ["JavaScript", "TypeScript", "React", "WebGL"],
-        "skills": ["JavaScript", "TypeScript", "React", "WebGL", "CSS"],
-    },
-    {
-        "_id": "5", "title": "Backend Engineer", "company": "PlanetScale",
-        "location": "Remote", "type": "Full-time", "remote": True,
-        "salaryMin": 140000, "salaryMax": 180000, "salary": "$140k–$180k",
-        "level": "Senior", "yearsExp": 6, "industry": "Database", "featured": False,
-        "demandTrend": "Increasing",
-        "description": "Build the infrastructure and APIs that power PlanetScale's database-as-a-service product at scale.",
-        "requirements": ["Go", "MySQL", "Kubernetes", "Distributed Systems"],
-        "skills": ["Go", "MySQL", "Kubernetes", "Docker", "REST APIs", "Linux"],
-    },
-    {
-        "_id": "6", "title": "Machine Learning Engineer", "company": "Hugging Face",
-        "location": "Remote", "type": "Full-time", "remote": True,
-        "salaryMin": 150000, "salaryMax": 200000, "salary": "$150k–$200k",
-        "level": "Senior", "yearsExp": 4, "industry": "AI/ML", "featured": True,
-        "demandTrend": "Increasing",
-        "description": "Work on open-source ML tools, models and infrastructure used by millions of researchers and developers worldwide.",
-        "requirements": ["Python", "PyTorch", "NLP", "Deep Learning"],
-        "skills": ["Python", "PyTorch", "NLP", "Machine Learning", "Deep Learning", "Docker"],
-    },
-]
+# Global singleton matcher — refitted whenever /load-jobs is called
+matcher = get_matcher()
 
-# Fit the matcher with the sample jobs at startup
-matcher.fit(SAMPLE_JOBS)
-logger.info("Matcher fitted with sample jobs at startup.")
+# In-memory job store (replaced by /load-jobs from Express)
+_JOBS: list[dict] = []
 
 
-# ── GET /health ───────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────────────────────
+# HEALTH
+# ─────────────────────────────────────────────────────────────────────────────
+
 @bp.route("/health", methods=["GET"])
 def health():
     return jsonify({
-        "status":       "ok",
-        "service":      "JobMatch AI Service",
-        "jobs_loaded":  len(SAMPLE_JOBS),
+        "status":        "ok",
+        "service":       "JobMatch AI Service",
+        "jobs_loaded":   len(_JOBS),
         "matcher_ready": matcher._is_fitted,
     })
 
 
-# ── POST /match ───────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────────────────────
+# MATCH  —  score jobs for a user
+# ─────────────────────────────────────────────────────────────────────────────
+
 @bp.route("/match", methods=["POST"])
 def match_jobs():
     """
-    Score a user's skills and CV text against all loaded jobs.
-
-    Request body:
-        {
-            "skills":     ["React", "TypeScript", ...],
-            "cv_text":    "Raw CV text...",
-            "years_exp":  3,
-            "top_n":      10
-        }
-
-    Response:
-        {
-            "matches": [
-                {
-                    "job": {...},
-                    "match_score": 87,
-                    "component_scores": {...},
-                    "matched_skills": [...],
-                    "missing_skills": [...]
-                },
-                ...
-            ]
-        }
+    Body:
+      skills     list[str]   user's skills (canonical)
+      cv_text    str         raw CV text for TF-IDF
+      years_exp  int         years of experience
+      strengths  dict        skill → weight (0-1) from CV prominence
+      cv_roles   list[str]   past job titles from CV
+      jobs       list[dict]  optional — if provided, fit on these jobs
+      top_n      int         max results (default 20)
     """
     data = request.get_json(silent=True) or {}
 
-    user_skills = data.get("skills", [])
-    cv_text     = data.get("cv_text", "")
-    years_exp   = int(data.get("years_exp", 0))
-    top_n       = int(data.get("top_n", 20))
-    strengths   = data.get("strengths") or {}
-    cv_roles    = data.get("cv_roles") or []
-    jobs_batch  = data.get("jobs") or []
+    user_skills  = data.get("skills",    [])
+    cv_text      = data.get("cv_text",   "")
+    years_exp    = int(data.get("years_exp", 0))
+    top_n        = int(data.get("top_n",    20))
+    strengths    = data.get("strengths") or {}
+    cv_roles     = data.get("cv_roles")  or []
+    jobs_batch   = data.get("jobs")      or []
 
-    # Isolated matcher per request — no shared mutable state between users
-    active_matcher = JobMatcher()
+    # Build a per-request matcher when a jobs batch is provided,
+    # otherwise use the global singleton (pre-fitted via /load-jobs).
     if jobs_batch:
-        active_matcher.fit(jobs_batch)
+        active = JobMatcher()
+        active.fit(jobs_batch)
     elif matcher._is_fitted:
-        active_matcher.fit(matcher.jobs_data)
+        active = matcher
     else:
-        return jsonify({"error": "No jobs loaded. Provide jobs array."}), 400
+        return jsonify({"error": "No jobs loaded. Call /load-jobs first or provide jobs array."}), 400
 
-    # Normalize incoming skills; merge explicit + inferred from experience
+    # Normalise + enrich skills from CV text
     user_skills = normalize_skills_list(user_skills)
     if cv_text:
         user_skills, inferred = build_matching_skills(user_skills, cv_text, cv_roles)
@@ -155,16 +446,12 @@ def match_jobs():
         return jsonify({"error": "Provide at least one of: skills, cv_text"}), 400
 
     logger.info(
-        "Match request: %d skills (%d inferred), cv_len=%d, roles=%d, jobs=%d",
-        len(user_skills),
-        len(inferred),
-        len(cv_text or ""),
-        len(cv_roles),
-        len(active_matcher.jobs_data),
+        "/match  skills=%d  inferred=%d  roles=%d  jobs=%d",
+        len(user_skills), len(inferred), len(cv_roles), len(active.jobs_data),
     )
 
     try:
-        matches = active_matcher.match(
+        matches = active.match(
             user_skills=user_skills,
             cv_text=cv_text,
             years_exp=years_exp,
@@ -173,66 +460,62 @@ def match_jobs():
             cv_roles=cv_roles,
         )
 
-        # Clean up response — remove raw job object, add id field
         response_matches = []
         for m in matches:
             job = m["job"]
             response_matches.append({
-                "job_id":          job.get("_id"),
-                "title":           job.get("title"),
-                "company":         job.get("company"),
-                "location":        job.get("location"),
-                "salary":          job.get("salary"),
-                "type":            job.get("type"),
-                "remote":          job.get("remote"),
-                "level":           job.get("level"),
-                "industry":        job.get("industry"),
-                "match_score":     m["match_score"],
+                "job_id":           job.get("_id"),
+                "title":            job.get("title"),
+                "company":          job.get("company"),
+                "location":         job.get("location"),
+                "salary":           job.get("salary"),
+                "type":             job.get("type"),
+                "remote":           job.get("remote"),
+                "level":            job.get("level"),
+                "industry":         job.get("industry"),
+                "match_score":      m["match_score"],
                 "component_scores": m["component_scores"],
-                "matched_skills":  m["matched_skills"],
-                "missing_skills":  m["missing_skills"],
-                "match_factors":   m.get("match_factors", []),
-                "match_summary":   m.get("match_summary", ""),
+                "matched_skills":   m["matched_skills"],
+                "missing_skills":   m["missing_skills"],
+                "match_factors":    m.get("match_factors",  []),
+                "match_summary":    m.get("match_summary",  ""),
             })
 
         return jsonify({
-            "success": True,
-            "matches": response_matches,
-            "total": len(response_matches),
-            "profile_skills": user_skills,
-            "inferred_skills": inferred,
+            "success":          True,
+            "matches":          response_matches,
+            "total":            len(response_matches),
+            "profile_skills":   user_skills,
+            "inferred_skills":  inferred,
         })
 
-    except Exception as e:
-        logger.error(f"/match error: {e}", exc_info=True)
-        return jsonify({"error": str(e)}), 500
+    except Exception as exc:
+        logger.exception("/match error: %s", exc)
+        return jsonify({"error": str(exc)}), 500
 
 
-# ── POST /parse-cv ────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────────────────────
+# PARSE CV  —  extract text + skills from an uploaded file
+# ─────────────────────────────────────────────────────────────────────────────
+
 @bp.route("/parse-cv", methods=["POST"])
 def parse_cv_endpoint():
     """
-    Accept a CV file upload, extract text and skills.
+    Multipart/form-data with field 'file' (PDF, DOCX, or TXT).
 
-    Request: multipart/form-data with field 'file'
-
-    Response:
-        {
-            "skills":          ["React", "TypeScript", ...],
-            "years_experience": 4,
-            "word_count":       650,
-            "raw_text_preview": "First 300 chars..."
-        }
+    Returns:
+      skills, explicit_skills, inferred_skills, roles,
+      strengths, years_experience, word_count, raw_text (first 12 000 chars)
     """
     if "file" not in request.files:
         return jsonify({"error": "No file provided. Use field name 'file'."}), 400
 
     file = request.files["file"]
-    if file.filename == "":
+    if not file.filename:
         return jsonify({"error": "Empty filename."}), 400
 
-    # Save to a temp file — parse it — delete it
     suffix = os.path.splitext(file.filename)[1].lower()
+    tmp_path = None
     try:
         with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
             file.save(tmp.name)
@@ -241,15 +524,17 @@ def parse_cv_endpoint():
         result = parse_cv(tmp_path)
 
     finally:
-        try:
-            os.unlink(tmp_path)
-        except Exception:
-            pass
+        if tmp_path and os.path.exists(tmp_path):
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
 
-    if not result["success"]:
+    if not result.get("success"):
         return jsonify({"error": result.get("error", "Parsing failed")}), 500
 
     raw = result.get("raw_text", "")
+
     logger.info(
         "CV parsed: %d skills (%d explicit, %d inferred), %d roles",
         len(result["skills"]),
@@ -263,46 +548,42 @@ def parse_cv_endpoint():
         "skills":           result["skills"],
         "explicit_skills":  result.get("explicit_skills", result["skills"]),
         "inferred_skills":  result.get("inferred_skills", []),
-        "roles":            result.get("roles", []),
+        "roles":            result.get("roles",     []),
         "strengths":        result.get("strengths", {}),
-        "years_experience": result["years_experience"],
-        "word_count":       result["word_count"],
+        "years_experience": result.get("years_experience", 0),
+        "word_count":       result.get("word_count",        0),
         "raw_text":         raw[:12000],
-        "raw_text_preview": raw[:300] + "..." if len(raw) > 300 else raw,
+        "raw_text_preview": (raw[:300] + "...") if len(raw) > 300 else raw,
     })
 
 
-# ── POST /parse-text ──────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────────────────────
+# PARSE TEXT  —  extract skills from a plain-text string
+# ─────────────────────────────────────────────────────────────────────────────
+
 @bp.route("/parse-text", methods=["POST"])
 def parse_text_endpoint():
-    """
-    Extract skills from plain text (no file upload required).
-    Useful for LinkedIn import or manual text paste.
-
-    Request body: { "text": "raw text..." }
-    """
+    """Body: { "text": "..." }"""
     data = request.get_json(silent=True) or {}
     text = data.get("text", "")
-
     if not text:
         return jsonify({"error": "Provide 'text' field in request body."}), 400
 
-    skills = extract_skills_from_text(text)
+    skills = extract_skills_from_cv_text(text)
     return jsonify({"success": True, "skills": skills, "count": len(skills)})
 
 
-# ── POST /skill-gap ───────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────────────────────
+# SKILL GAP  —  compare user skills to a specific job
+# ─────────────────────────────────────────────────────────────────────────────
+
 @bp.route("/skill-gap", methods=["POST"])
 def skill_gap_endpoint():
     """
-    Analyse skill gap between user and a specific job.
-
-    Request body:
-        {
-            "user_skills": ["React", "JavaScript"],
-            "job_id":      "1"           (optional — uses job from loaded list)
-            "job":         {...}          (optional — provide full job object)
-        }
+    Body:
+      user_skills  list[str]
+      job_id       str   (optional — looks up from loaded jobs)
+      job          dict  (optional — provide full job object directly)
     """
     data = request.get_json(silent=True) or {}
 
@@ -310,45 +591,50 @@ def skill_gap_endpoint():
     job_id      = data.get("job_id")
     job_data    = data.get("job")
 
-    # Resolve the job — either from provided object or our sample list
     if job_data:
         job = job_data
     elif job_id:
-        job = next((j for j in SAMPLE_JOBS if str(j.get("_id")) == str(job_id)), None)
+        job = next(
+            (j for j in _JOBS if str(j.get("_id")) == str(job_id)
+             or str(j.get("externalId")) == str(job_id)),
+            None,
+        )
         if not job:
-            return jsonify({"error": f"Job {job_id} not found."}), 404
+            return jsonify({"error": f"Job '{job_id}' not found in loaded jobs."}), 404
     else:
         return jsonify({"error": "Provide 'job_id' or 'job' object."}), 400
 
     try:
         analysis = analyse_skill_gap(user_skills, job)
         return jsonify({"success": True, **analysis})
-    except Exception as e:
-        logger.error(f"/skill-gap error: {e}", exc_info=True)
-        return jsonify({"error": str(e)}), 500
+    except Exception as exc:
+        logger.exception("/skill-gap error: %s", exc)
+        return jsonify({"error": str(exc)}), 500
 
 
-# ── POST /load-jobs ───────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────────────────────
+# LOAD JOBS  —  replace in-memory job list and refit the TF-IDF model
+# ─────────────────────────────────────────────────────────────────────────────
+
 @bp.route("/load-jobs", methods=["POST"])
 def load_jobs():
     """
-    Replace the in-memory job list with a new set and refit the TF-IDF model.
-    Called by the Express backend after jobs are updated in MongoDB (Step 5).
-
-    Request body: { "jobs": [...] }
+    Body: { "jobs": [...] }
+    Called by Express after MongoDB jobs are updated.
     """
-    global SAMPLE_JOBS
+    global _JOBS
     data = request.get_json(silent=True) or {}
     jobs = data.get("jobs", [])
 
     if not jobs:
-        return jsonify({"error": "Provide 'jobs' array."}), 400
+        return jsonify({"error": "Provide a non-empty 'jobs' array."}), 400
 
-    SAMPLE_JOBS = jobs
+    _JOBS = jobs
     matcher.fit(jobs)
 
+    logger.info("Matcher reloaded with %d jobs.", len(jobs))
     return jsonify({
-        "success":      True,
-        "message":      f"Matcher reloaded with {len(jobs)} jobs.",
-        "jobs_loaded":  len(jobs),
+        "success":     True,
+        "message":     f"Matcher reloaded with {len(jobs)} jobs.",
+        "jobs_loaded": len(jobs),
     })

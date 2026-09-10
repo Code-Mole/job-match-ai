@@ -1,176 +1,358 @@
+# """
+# CV Parser — extracts raw text and identifies skills from uploaded CV files.
+# Supports PDF (via pdfplumber + PyMuPDF fallback), DOCX, and TXT.
+# """
+
+# import re
+# import os
+# import logging
+# from typing import Optional
+
+# # PDF extraction libraries — pdfplumber is more accurate, fitz is faster
+# try:
+#     import pdfplumber
+#     PDFPLUMBER_AVAILABLE = True
+# except ImportError:
+#     PDFPLUMBER_AVAILABLE = False
+
+# try:
+#     import fitz  # PyMuPDF
+#     PYMUPDF_AVAILABLE = True
+# except ImportError:
+#     PYMUPDF_AVAILABLE = False
+
+# # DOCX extraction
+# try:
+#     from docx import Document
+#     DOCX_AVAILABLE = True
+# except ImportError:
+#     DOCX_AVAILABLE = False
+
+# from .cv_skill_extractor import extract_cv_profile, extract_skills_from_cv_text
+
+# logger = logging.getLogger(__name__)
+
+
+# def extract_text_from_pdf(file_path: str) -> str:
+#     """
+#     Extract text from a PDF file.
+#     Tries pdfplumber first (better layout handling), falls back to PyMuPDF.
+#     """
+#     text = ""
+
+#     # Method 1: pdfplumber — better for tables and columns
+#     if PDFPLUMBER_AVAILABLE:
+#         try:
+#             with pdfplumber.open(file_path) as pdf:
+#                 for page in pdf.pages:
+#                     page_text = page.extract_text()
+#                     if page_text:
+#                         text += page_text + "\n"
+#             if text.strip():
+#                 return text
+#         except Exception as e:
+#             logger.warning(f"pdfplumber failed: {e}, trying PyMuPDF...")
+
+#     # Method 2: PyMuPDF fallback
+#     if PYMUPDF_AVAILABLE:
+#         try:
+#             doc = fitz.open(file_path)
+#             for page in doc:
+#                 text += page.get_text() + "\n"
+#             doc.close()
+#             return text
+#         except Exception as e:
+#             logger.error(f"PyMuPDF also failed: {e}")
+
+#     raise RuntimeError("No PDF library available. Install pdfplumber or pymupdf.")
+
+
+# def extract_text_from_docx(file_path: str) -> str:
+#     """Extract text from a DOCX file — reads all paragraphs and tables."""
+#     if not DOCX_AVAILABLE:
+#         raise RuntimeError("python-docx not installed.")
+
+#     doc = Document(file_path)
+#     parts = []
+
+#     # Main paragraphs
+#     for para in doc.paragraphs:
+#         if para.text.strip():
+#             parts.append(para.text)
+
+#     # Text inside tables (many CVs use tables for layout)
+#     for table in doc.tables:
+#         for row in table.rows:
+#             for cell in row.cells:
+#                 if cell.text.strip():
+#                     parts.append(cell.text)
+
+#     return "\n".join(parts)
+
+
+# def extract_text_from_file(file_path: str) -> str:
+#     """
+#     Dispatch to the right extractor based on file extension.
+#     Returns raw text string.
+#     """
+#     ext = os.path.splitext(file_path)[1].lower()
+
+#     if ext == ".pdf":
+#         return extract_text_from_pdf(file_path)
+#     elif ext == ".docx":
+#         return extract_text_from_docx(file_path)
+#     elif ext in (".txt", ".text"):
+#         with open(file_path, "r", encoding="utf-8", errors="replace") as f:
+#             return f.read()
+#     else:
+#         raise ValueError(f"Unsupported file type: {ext}")
+
+
+# def extract_skills_from_text(text: str) -> list:
+#     """Open CV-based skill extraction (all industries, not tech-only)."""
+#     return extract_skills_from_cv_text(text)
+
+
+# def extract_years_of_experience(text: str) -> int:
+#     """
+#     Try to infer total years of experience from CV text.
+#     Looks for patterns like "5 years of experience", "3+ years", etc.
+#     Returns the highest number found (as a conservative estimate).
+#     """
+#     patterns = [
+#         r'(\d+)\+?\s+years?\s+of\s+(?:professional\s+)?experience',
+#         r'(\d+)\+?\s+years?\s+(?:of\s+)?(?:work\s+)?experience',
+#         r'experience\s+of\s+(\d+)\+?\s+years?',
+#         r'(\d+)\+?\s+years?\s+(?:in|with|using)',
+#     ]
+#     years_found = []
+#     for pattern in patterns:
+#         matches = re.findall(pattern, text.lower())
+#         years_found.extend(int(m) for m in matches)
+
+#     return max(years_found) if years_found else 0
+
+
+# def parse_cv(file_path: str) -> dict:
+#     """
+#     Main entry point — parse a CV file and return structured data.
+
+#     Returns:
+#         {
+#             "raw_text": str,
+#             "skills": list[str],
+#             "years_experience": int,
+#             "word_count": int,
+#             "char_count": int,
+#         }
+#     """
+#     try:
+#         raw_text = extract_text_from_file(file_path)
+#         profile = extract_cv_profile(raw_text)
+#         skills = profile["skills"]
+#         years_exp = extract_years_of_experience(raw_text)
+
+#         return {
+#             "success":          True,
+#             "raw_text":         raw_text,
+#             "skills":           skills,
+#             "explicit_skills":  profile.get("explicit_skills", skills),
+#             "inferred_skills":  profile.get("inferred_skills", []),
+#             "roles":            profile.get("roles", []),
+#             "strengths":        profile.get("strengths", {}),
+#             "years_experience": years_exp,
+#             "word_count":       len(raw_text.split()),
+#             "char_count":       len(raw_text),
+#         }
+
+#     except Exception as e:
+#         logger.error(f"CV parsing failed for {file_path}: {e}")
+#         return {
+#             "success": False,
+#             "error":   str(e),
+#             "raw_text": "",
+#             "skills":   [],
+#             "years_experience": 0,
+#         }
+
 """
-CV Parser — extracts raw text and identifies skills from uploaded CV files.
-Supports PDF (via pdfplumber + PyMuPDF fallback), DOCX, and TXT.
+cv_parser.py
+============
+Extracts raw text from PDF, DOCX, and TXT files,
+then delegates skill extraction to cv_skill_extractor.
 """
 
 import re
 import os
 import logging
-from typing import Optional
 
-# PDF extraction libraries — pdfplumber is more accurate, fitz is faster
 try:
     import pdfplumber
-    PDFPLUMBER_AVAILABLE = True
+    _PDFPLUMBER = True
 except ImportError:
-    PDFPLUMBER_AVAILABLE = False
+    _PDFPLUMBER = False
 
 try:
-    import fitz  # PyMuPDF
-    PYMUPDF_AVAILABLE = True
+    import fitz          # PyMuPDF
+    _PYMUPDF = True
 except ImportError:
-    PYMUPDF_AVAILABLE = False
+    _PYMUPDF = False
 
-# DOCX extraction
 try:
     from docx import Document
-    DOCX_AVAILABLE = True
+    _DOCX = True
 except ImportError:
-    DOCX_AVAILABLE = False
+    _DOCX = False
 
-from .cv_skill_extractor import extract_cv_profile, extract_skills_from_cv_text
+from .cv_skill_extractor import extract_cv_profile
 
 logger = logging.getLogger(__name__)
 
 
-def extract_text_from_pdf(file_path: str) -> str:
-    """
-    Extract text from a PDF file.
-    Tries pdfplumber first (better layout handling), falls back to PyMuPDF.
-    """
-    text = ""
+# ─────────────────────────────────────────────────────────────────────────────
+# TEXT EXTRACTION
+# ─────────────────────────────────────────────────────────────────────────────
 
-    # Method 1: pdfplumber — better for tables and columns
-    if PDFPLUMBER_AVAILABLE:
+def _extract_pdf(path: str) -> str:
+    text = ""
+    if _PDFPLUMBER:
         try:
-            with pdfplumber.open(file_path) as pdf:
+            with pdfplumber.open(path) as pdf:
                 for page in pdf.pages:
-                    page_text = page.extract_text()
-                    if page_text:
-                        text += page_text + "\n"
+                    t = page.extract_text()
+                    if t:
+                        text += t + "\n"
             if text.strip():
                 return text
-        except Exception as e:
-            logger.warning(f"pdfplumber failed: {e}, trying PyMuPDF...")
+        except Exception as exc:
+            logger.warning("pdfplumber failed (%s) — trying PyMuPDF", exc)
 
-    # Method 2: PyMuPDF fallback
-    if PYMUPDF_AVAILABLE:
+    if _PYMUPDF:
         try:
-            doc = fitz.open(file_path)
+            doc = fitz.open(path)
             for page in doc:
                 text += page.get_text() + "\n"
             doc.close()
             return text
-        except Exception as e:
-            logger.error(f"PyMuPDF also failed: {e}")
+        except Exception as exc:
+            logger.error("PyMuPDF failed: %s", exc)
 
-    raise RuntimeError("No PDF library available. Install pdfplumber or pymupdf.")
+    raise RuntimeError(
+        "No PDF library available. Run: pip install pdfplumber pymupdf"
+    )
 
 
-def extract_text_from_docx(file_path: str) -> str:
-    """Extract text from a DOCX file — reads all paragraphs and tables."""
-    if not DOCX_AVAILABLE:
-        raise RuntimeError("python-docx not installed.")
-
-    doc = Document(file_path)
-    parts = []
-
-    # Main paragraphs
-    for para in doc.paragraphs:
-        if para.text.strip():
-            parts.append(para.text)
-
-    # Text inside tables (many CVs use tables for layout)
+def _extract_docx(path: str) -> str:
+    if not _DOCX:
+        raise RuntimeError("python-docx not installed. Run: pip install python-docx")
+    doc   = Document(path)
+    parts = [p.text for p in doc.paragraphs if p.text.strip()]
     for table in doc.tables:
         for row in table.rows:
             for cell in row.cells:
                 if cell.text.strip():
                     parts.append(cell.text)
-
     return "\n".join(parts)
 
 
-def extract_text_from_file(file_path: str) -> str:
-    """
-    Dispatch to the right extractor based on file extension.
-    Returns raw text string.
-    """
-    ext = os.path.splitext(file_path)[1].lower()
+def _extract_text_file(path: str) -> str:
+    with open(path, "r", encoding="utf-8", errors="replace") as f:
+        return f.read()
 
+
+def extract_text_from_file(path: str) -> str:
+    ext = os.path.splitext(path)[1].lower()
     if ext == ".pdf":
-        return extract_text_from_pdf(file_path)
-    elif ext == ".docx":
-        return extract_text_from_docx(file_path)
-    elif ext in (".txt", ".text"):
-        with open(file_path, "r", encoding="utf-8", errors="replace") as f:
-            return f.read()
-    else:
-        raise ValueError(f"Unsupported file type: {ext}")
+        return _extract_pdf(path)
+    if ext == ".docx":
+        return _extract_docx(path)
+    if ext in (".txt", ".text"):
+        return _extract_text_file(path)
+    raise ValueError(f"Unsupported file type: {ext}")
 
 
-def extract_skills_from_text(text: str) -> list:
-    """Open CV-based skill extraction (all industries, not tech-only)."""
+# ─────────────────────────────────────────────────────────────────────────────
+# YEARS OF EXPERIENCE
+# ─────────────────────────────────────────────────────────────────────────────
+
+_EXP_PATTERNS = [
+    r"(\d+)\+?\s+years?\s+of\s+(?:professional\s+)?experience",
+    r"(\d+)\+?\s+years?\s+(?:of\s+)?(?:work\s+)?experience",
+    r"experience\s+of\s+(\d+)\+?\s+years?",
+    r"(\d+)\+?\s+years?\s+(?:in|with|using)",
+]
+
+
+def _years_of_experience(text: str) -> int:
+    years = []
+    for pat in _EXP_PATTERNS:
+        for m in re.finditer(pat, text, re.I):
+            try:
+                years.append(int(m.group(1)))
+            except ValueError:
+                pass
+    return max(years) if years else 0
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# PUBLIC API
+# ─────────────────────────────────────────────────────────────────────────────
+
+def extract_skills_from_text(text: str) -> list[str]:
+    """Extract skills from a plain-text string (used by /parse-text endpoint)."""
+    from .cv_skill_extractor import extract_skills_from_cv_text
     return extract_skills_from_cv_text(text)
-
-
-def extract_years_of_experience(text: str) -> int:
-    """
-    Try to infer total years of experience from CV text.
-    Looks for patterns like "5 years of experience", "3+ years", etc.
-    Returns the highest number found (as a conservative estimate).
-    """
-    patterns = [
-        r'(\d+)\+?\s+years?\s+of\s+(?:professional\s+)?experience',
-        r'(\d+)\+?\s+years?\s+(?:of\s+)?(?:work\s+)?experience',
-        r'experience\s+of\s+(\d+)\+?\s+years?',
-        r'(\d+)\+?\s+years?\s+(?:in|with|using)',
-    ]
-    years_found = []
-    for pattern in patterns:
-        matches = re.findall(pattern, text.lower())
-        years_found.extend(int(m) for m in matches)
-
-    return max(years_found) if years_found else 0
 
 
 def parse_cv(file_path: str) -> dict:
     """
-    Main entry point — parse a CV file and return structured data.
+    Parse a CV file and return a structured profile dict.
 
     Returns:
-        {
-            "raw_text": str,
-            "skills": list[str],
-            "years_experience": int,
-            "word_count": int,
-            "char_count": int,
-        }
+      success          bool
+      raw_text         str
+      skills           list[str]   — all skills for matching
+      explicit_skills  list[str]   — directly stated on CV
+      inferred_skills  list[str]   — inferred from experience text
+      roles            list[str]   — past job titles
+      strengths        dict        — skill → frequency weight
+      years_experience int
+      word_count       int
+      char_count       int
     """
     try:
         raw_text = extract_text_from_file(file_path)
-        profile = extract_cv_profile(raw_text)
-        skills = profile["skills"]
-        years_exp = extract_years_of_experience(raw_text)
+        profile  = extract_cv_profile(raw_text)
+        years    = _years_of_experience(raw_text)
 
         return {
             "success":          True,
             "raw_text":         raw_text,
-            "skills":           skills,
-            "explicit_skills":  profile.get("explicit_skills", skills),
+            "skills":           profile["skills"],
+            "explicit_skills":  profile.get("explicit_skills", profile["skills"]),
             "inferred_skills":  profile.get("inferred_skills", []),
-            "roles":            profile.get("roles", []),
+            "roles":            profile.get("roles",     []),
             "strengths":        profile.get("strengths", {}),
-            "years_experience": years_exp,
+            "certifications":   profile.get("certifications", []),
+            "education":        profile.get("education", []),
+            "projects":         profile.get("projects",  []),
+            "years_experience": years,
             "word_count":       len(raw_text.split()),
             "char_count":       len(raw_text),
         }
 
-    except Exception as e:
-        logger.error(f"CV parsing failed for {file_path}: {e}")
+    except Exception as exc:
+        logger.exception("CV parsing failed for %s: %s", file_path, exc)
         return {
-            "success": False,
-            "error":   str(e),
-            "raw_text": "",
-            "skills":   [],
+            "success":          False,
+            "error":            str(exc),
+            "raw_text":         "",
+            "skills":           [],
+            "explicit_skills":  [],
+            "inferred_skills":  [],
+            "roles":            [],
+            "strengths":        {},
             "years_experience": 0,
+            "word_count":       0,
+            "char_count":       0,
         }

@@ -38,10 +38,10 @@ function getGroqCloudApiKey() {
 function hasAnyChatProvider() {
   return Boolean(
     process.env.OPENAI_API_KEY ||
-      process.env.XAI_API_KEY ||
-      getGroqCloudApiKey() ||
-      (process.env.ANTHROPIC_API_KEY &&
-        process.env.CHAT_PROVIDER?.toLowerCase() === "anthropic"),
+    process.env.XAI_API_KEY ||
+    getGroqCloudApiKey() ||
+    (process.env.ANTHROPIC_API_KEY &&
+      process.env.CHAT_PROVIDER?.toLowerCase() === "anthropic"),
   );
 }
 
@@ -108,7 +108,7 @@ function getProviderConfig(provider) {
         model:
           process.env.GROQCLOUD_CHAT_MODEL ||
           process.env.GROQ_CHAT_MODEL ||
-          "llama-3.3-70b-versatile",
+          "openai/gpt-oss-120b",
       };
     }
     case "anthropic":
@@ -152,7 +152,12 @@ function parseProviderError(err, provider) {
   return raw;
 }
 
-async function runOpenAICompatibleChat({ res, config, systemPrompt, messages }) {
+async function runOpenAICompatibleChat({
+  res,
+  config,
+  systemPrompt,
+  messages,
+}) {
   let streamed = await streamOpenAICompatible({
     res,
     baseUrl: config.baseUrl,
@@ -192,7 +197,11 @@ async function runChatWithFallback({ res, systemPrompt, messages }) {
     const config = getProviderConfig(provider);
     try {
       if (config.kind === "anthropic") {
-        let streamed = await streamAnthropicChat({ res, systemPrompt, messages });
+        let streamed = await streamAnthropicChat({
+          res,
+          systemPrompt,
+          messages,
+        });
         if (!streamed) {
           const text = await completeAnthropicChat({ systemPrompt, messages });
           if (text) res.write(`data: ${JSON.stringify({ text })}\n\n`);
@@ -237,10 +246,7 @@ async function streamOpenAICompatible({
     body: JSON.stringify({
       model,
       stream: true,
-      messages: [
-        { role: "system", content: systemPrompt },
-        ...messages,
-      ],
+      messages: [{ role: "system", content: systemPrompt }, ...messages],
     }),
   });
 
@@ -283,8 +289,7 @@ async function streamOpenAICompatible({
 
 async function streamAnthropicChat({ res, systemPrompt, messages }) {
   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-  const model =
-    process.env.ANTHROPIC_MODEL || "claude-3-5-sonnet-20241022";
+  const model = process.env.ANTHROPIC_MODEL || "claude-3-5-sonnet-20241022";
 
   const stream = await client.messages.stream({
     model,
@@ -295,7 +300,10 @@ async function streamAnthropicChat({ res, systemPrompt, messages }) {
 
   let sent = false;
   for await (const chunk of stream) {
-    if (chunk.type === "content_block_delta" && chunk.delta?.type === "text_delta") {
+    if (
+      chunk.type === "content_block_delta" &&
+      chunk.delta?.type === "text_delta"
+    ) {
       const text = chunk.delta.text;
       if (text) {
         sent = true;
@@ -307,7 +315,13 @@ async function streamAnthropicChat({ res, systemPrompt, messages }) {
 }
 
 /** Non-streaming fallback when SSE yields no tokens */
-async function completeOpenAICompatible({ baseUrl, apiKey, model, systemPrompt, messages }) {
+async function completeOpenAICompatible({
+  baseUrl,
+  apiKey,
+  model,
+  systemPrompt,
+  messages,
+}) {
   const apiRes = await fetch(`${baseUrl.replace(/\/$/, "")}/chat/completions`, {
     method: "POST",
     headers: {

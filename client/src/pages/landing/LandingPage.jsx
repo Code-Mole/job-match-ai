@@ -417,7 +417,7 @@ export default function LandingPage() {
 
             <p className="text-lg text-slate-600 dark:text-slate-400 leading-relaxed mb-8 max-w-lg">
               Upload your CV and get AI-powered job matches, a transparent score
-              breakdown, skill gap analysis, and a personalised learning path —
+              breakdown, skill gap analysis, and a personalised learning path
               in under 30 seconds.
             </p>
 
